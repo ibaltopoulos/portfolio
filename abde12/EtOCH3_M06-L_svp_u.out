@@ -1,0 +1,470 @@
+
+ Primary working directories    : /tmp/sb13343
+ Secondary working directories  : /tmp/sb13343
+ Wavefunction directory         : /panfs/panasas01/chem/sb13343/wfu/
+ Main file repository           : /tmp/sb13343/
+
+ SHA1      : b4a5b34a9e711420743f49e6833241d17c61fb3c
+ NAME      : 2099.9.b4a5b34
+ ARCHNAME  : linux/x86_64_openmp
+ FC        : /cm/shared/languages/GCC-6.1/bin/gfortran
+ BLASLIB   : -lblas
+ id        : simonbennie
+
+ Nodes     nprocs
+ node32-028    1
+
+ Using customized tuning parameters: mindgm=1; mindgv=20; mindgc=4; mindgr=1; noblas=0; minvec=7
+ default implementation of scratch files=df  
+
+ memory,500,m
+ geomtyp=xyz
+ nosym
+ noorient
+ geometry={
+ C          0.00000        0.00000        0.00000
+ O          0.00000        0.00000        1.40962
+ C          1.30608        0.00000        1.95787
+ C          1.19221        0.00000        3.47353
+ H          2.18666        0.00000        3.93332
+ H         -1.04410        0.00000       -0.32474
+ H          0.50079       -0.89267       -0.41051
+ H          0.50079        0.89267       -0.41051
+ H          1.86435       -0.88728        1.61056
+ H          1.86435        0.88728        1.61056
+ H          0.64981       -0.88690        3.81673
+ H          0.64981        0.88690        3.81673
+ }
+ basis={ default,svp }
+ {uks,M06-L,direct;wf,34,1,0}
+ {ibba,bonds=1}
+
+ Variables initialized (895), CPU time= 0.00 sec
+ Commands  initialized (725), CPU time= 0.01 sec, 591 directives.
+ Default parameters read. Elapsed time= 0.08 sec
+
+ Checking input...
+ Passed
+1
+
+
+                                         ***  PROGRAM SYSTEM MOLPRO  ***
+                                       Copyright, TTI GmbH Stuttgart, 2015
+                                    Version 2099.9 linked May 26 2017 16:03:21
+
+
+ **********************************************************************************************************************************
+ LABEL *                                                                                 
+  64 bit serial version                                                                  DATE: 08-Jun-17          TIME: 10:22:07  
+ **********************************************************************************************************************************
+
+ SHA1:             b4a5b34a9e711420743f49e6833241d17c61fb3c
+ **********************************************************************************************************************************
+ SETTING GEOMTYP        =    XYZ
+
+ Variable memory set to  500000000 words,  buffer space 
+
+ ZSYMEL=NOSYM
+
+ SETTING BASIS          =    SVP
+
+
+ Recomputing integrals since basis changed
+
+
+ Using spherical harmonics
+
+ Library entry C      S def2-SVP             selected for orbital group  1
+ Library entry C      P def2-SVP             selected for orbital group  1
+ Library entry C      D def2-SVP             selected for orbital group  1
+ Library entry O      S def2-SVP             selected for orbital group  2
+ Library entry O      P def2-SVP             selected for orbital group  2
+ Library entry O      D def2-SVP             selected for orbital group  2
+ Library entry H      S def2-SVP             selected for orbital group  4
+ Library entry H      P def2-SVP             selected for orbital group  4
+
+
+ PROGRAM * SEWARD (Integral evaluation for generally contracted gaussian basis sets)     Author: Roland Lindh, 1990
+
+ Geometry written to block  1 of record 700
+
+
+ Point group  C1  
+
+
+
+ ATOMIC COORDINATES
+
+ NR  ATOM    CHARGE       X              Y              Z
+
+   1  C       6.00    0.000000000    0.000000000    0.000000000
+   2  O       8.00    0.000000000    0.000000000    2.663795740
+   3  C       6.00    2.468133497    0.000000000    3.699838088
+   4  C       6.00    2.252950383    0.000000000    6.564020385
+   5  H       1.00    4.132188528    0.000000000    7.432897560
+   6  H       1.00   -1.973063047    0.000000000   -0.613669662
+   7  H       1.00    0.946355946   -1.686901820   -0.775751471
+   8  H       1.00    0.946355946    1.686901820   -0.775751471
+   9  H       1.00    3.523110900   -1.676716196    3.043517307
+  10  H       1.00    3.523110900    1.676716196    3.043517307
+  11  H       1.00    1.227962933   -1.675998100    7.212574391
+  12  H       1.00    1.227962933    1.675998100    7.212574391
+
+ Bond lengths in Bohr (Angstrom)
+
+ 1-2  2.663795740  1-6  2.066293358  1-7  2.083990804  1-8  2.083990804  2-3  2.676764223
+     ( 1.409620000)     ( 1.093435356)     ( 1.102800441)     ( 1.102800441)     ( 1.416482626)
+
+  3- 4  2.872254168   3- 9  2.086890388   3-10  2.086890388   4- 5  2.070382464   4-11  2.068862297
+       ( 1.519931450)       ( 1.104334835)       ( 1.104334835)       ( 1.095599218)       ( 1.094794780)
+
+  4-12  2.068862297
+       ( 1.094794780)
+
+ Bond angles
+
+  1-2-3  112.77108340   2-1-6  107.27693969   2-1-7  111.85402987   2-1-8  111.85402987
+
+  2- 3- 4  108.47458109   2- 3- 9  110.14508041   2- 3-10  110.14508041   3- 4- 5  110.51724552
+
+  3- 4-11  110.47015208   3- 4-12  110.47015208   4- 3- 9  110.57823876   4- 3-10  110.57823876
+
+  5- 4-11  108.55021133   5- 4-12  108.55021133   6- 1- 7  108.84842497   6- 1- 8  108.84842497
+
+  7- 1- 8  108.08590744   9- 3-10  106.92203462  11- 4-12  108.21261054
+
+ NUCLEAR CHARGE:                   34
+ NUMBER OF PRIMITIVE AOS:         156
+ NUMBER OF SYMMETRY AOS:          152
+ NUMBER OF CONTRACTIONS:           96   (  96A   )
+ NUMBER OF CORE ORBITALS:           4   (   4A   )
+ NUMBER OF VALENCE ORBITALS:       24   (  24A   )
+
+
+ NUCLEAR REPULSION ENERGY  133.31979421
+
+
+ Eigenvalues of metric
+
+         1 0.364E-02 0.952E-02 0.147E-01 0.282E-01 0.312E-01 0.319E-01 0.432E-01 0.449E-01
+
+
+ Contracted 2-electron integrals neglected if value below      1.0D-11
+ AO integral compression algorithm  1   Integral accuracy      1.0D-11
+
+     37.487 MB (compressed) written to integral file ( 40.8%)
+
+
+ NUMBER OF SORTED TWO-ELECTRON INTEGRALS:   10841496.     BUFFER LENGTH:  32768
+ NUMBER OF SEGMENTS:   1  SEGMENT LENGTH:   10841496      RECORD LENGTH: 524288
+
+ Memory used in sort:      11.40 MW
+
+ SORT1 READ    11483613. AND WROTE     8333550. INTEGRALS IN     24 RECORDS. CPU TIME:     0.12 SEC, REAL TIME:     0.23 SEC
+ SORT2 READ     8333550. AND WROTE    10841496. INTEGRALS IN    143 RECORDS. CPU TIME:     0.25 SEC, REAL TIME:     0.33 SEC
+
+ FILE SIZES:   FILE 1:    68.0 MBYTE,  FILE 4:   100.7 MBYTE,   TOTAL:    168.7 MBYTE
+
+ OPERATOR DM      FOR CENTER  0  COORDINATES:    0.000000    0.000000    0.000000
+
+
+ **********************************************************************************************************************************
+ DATASETS  * FILE   NREC   LENGTH (MB)   RECORD NAMES
+              1      19       62.89       500      610      700      900      950      970     1000      129      960     1100   
+                                          VAR    BASINP    GEOM    SYMINP    ZMAT    AOBASIS   BASIS     P2S    ABASIS      S 
+                                         1400     1410     1200     1210     1080     1600     1650     1300     1700   
+                                           T        V       H0       H01     AOSYM     SMH    MOLCAS    ERIS     OPER   
+
+ PROGRAMS   *        TOTAL       INT
+ CPU TIMES  *         1.74      1.60
+ REAL TIME  *         2.38 SEC
+ DISK USED  *       169.15 MB      
+ **********************************************************************************************************************************
+
+ Density functional group M06-L=XC-M06-L
+ Functional: XC-M06-L(via MFM 1.6)                                             Gradient terms: 1
+ Use grid at  1800.2
+
+ Functional: XC-M06-L                  Factor:  1.0000
+
+ Generated new metagrid on record  1800.2 with target accuracy 1.0D-06 and 44796 points in CPU time    1.1
+ Computed new grid on record 1800.1 in CPU time    1.2
+   80368 words reserved for DFT integration
+
+ PROGRAM * UKS-SCF (Unrestricted Kohn-Sham)     Authors: W. Meyer, H.-J. Werner, P.J. Knowles, 1993
+
+ NUMBER OF ELECTRONS:      17+   17-    SPACE SYMMETRY=1    SPIN SYMMETRY: Singlet 
+ CONVERGENCE THRESHOLDS:    1.00E-05 (Density)    1.00E-06 (Energy)
+ MAX. NUMBER OF ITERATIONS:       60
+ INTERPOLATION TYPE:            DIIS
+ INTERPOLATION STEPS:              2 (START)      1 (STEP)
+ LEVEL SHIFTS:                 -0.20 (ALPHA)  -0.20 (BETA) 
+
+
+
+ Use fine grid record 1800.2 for energy threshold  1.0D-06
+ Orbital guess generated from atomic densities. Full valence occupancy:   17
+
+ Molecular orbital dump at record        2200.2
+
+ Initial alpha occupation  17
+ Initial beta  occupation  17
+
+ ITERATION    DDIFF          GRAD             ENERGY        2-EL.EN.            DIPOLE MOMENTS         DIIS
+    1      0.000D+00      0.000D+00      -194.02783269    463.815990    0.78289   -0.00000   -0.49231    0
+    2      0.112D-01      0.520D-02      -194.14271768    449.592343    0.28812   -0.00000   -0.15958    1
+    3      0.355D-02      0.244D-02      -194.16470504    453.531103    0.44402   -0.00000   -0.26106    2
+    4      0.769D-03      0.406D-03      -194.16541211    453.240295    0.40284   -0.00000   -0.23771    3
+    5      0.512D-03      0.159D-03      -194.16561027    453.185275    0.39809   -0.00000   -0.23588    4
+    6      0.365D-03      0.514D-04      -194.16564800    453.147368    0.38958   -0.00000   -0.23254    5
+    7      0.822D-04      0.142D-04      -194.16564986    453.146524    0.38904   -0.00000   -0.23131    6
+    8      0.193D-04      0.694D-05      -194.16565013    453.145898    0.38838   -0.00000   -0.23128    7
+    9      0.738D-05      0.112D-05      -194.16565015    453.145735    0.38825   -0.00000   -0.23112    7
+   10      0.207D-05      0.323D-06      -194.16565015    453.145899    0.38822   -0.00000   -0.23108    7
+
+ Final alpha occupancy:  17
+ Final beta  occupancy:  17
+
+ !UKS STATE 1.1 Energy               -194.165650148328
+ Nuclear energy                       133.31979421
+ One-electron energy                 -526.22869833
+ Two-electron energy                  226.57294974
+ Density functional                   -27.82969577     XC-M06-L=-27.82969577
+ Virial quotient                       -1.00970358
+ !UKS STATE 1.1 Dipole moment           0.38822162    -0.00000000    -0.23108138
+ Dipole moment /Debye                   0.98669630    -0.00000000    -0.58731181
+
+ Orbital energies for positive spin:
+
+         1.1          2.1          3.1          4.1          5.1          6.1          7.1          8.1          9.1         10.1
+    -18.964324   -10.102924   -10.099387   -10.050950    -0.987553    -0.713831    -0.626345    -0.558431    -0.449733    -0.436511
+
+        11.1         12.1         13.1         14.1         15.1         16.1         17.1         18.1         19.1
+     -0.411629    -0.379871    -0.347319    -0.330015    -0.316644    -0.278960    -0.216949     0.071204     0.097070
+
+ Orbital energies for negative spin:
+
+         1.1          2.1          3.1          4.1          5.1          6.1          7.1          8.1          9.1         10.1
+    -18.964323   -10.102924   -10.099387   -10.050950    -0.987552    -0.713831    -0.626345    -0.558431    -0.449733    -0.436511
+
+        11.1         12.1         13.1         14.1         15.1         16.1         17.1         18.1         19.1
+     -0.411628    -0.379871    -0.347319    -0.330015    -0.316644    -0.278959    -0.216949     0.071205     0.097070
+
+ HOMO    -17.1    -0.216949 =      -5.9035eV
+ LUMO     18.1     0.071204 =       1.9376eV
+ LUMO-HOMO         0.288153 =       7.8410eV
+
+ EXPECTATION VALUE OF S**2:             0.00000000
+
+ Occupation number threshold for canonical orbitals:  1.999000 (occupied),  0.001000 (virtual)
+
+ Number of pseudo-canonical orbitals per symmetry:   17
+ Number of active natural orbitals per symmetry:      0
+
+ Natural orbitals saved to record    2200.2 (Orbital set 3)
+
+ Orbital spaces for UNO-CAS (Min. occupation: 0.020  Max. occupation: 1.980):
+
+ Closed:       17
+ Active:        0
+
+
+ **********************************************************************************************************************************
+ DATASETS  * FILE   NREC   LENGTH (MB)   RECORD NAMES
+              1      20       64.33       500      610      700      900      950      970     1000      129      960     1100   
+                                          VAR    BASINP    GEOM    SYMINP    ZMAT    AOBASIS   BASIS     P2S    ABASIS      S 
+                                         1400     1410     1200     1210     1080     1600     1650     1300     1700     1800   
+                                           T        V       H0       H01     AOSYM     SMH    MOLCAS    ERIS     OPER     GRID   
+
+              2       5        3.33       700     1000      520     1800     2200   
+                                         GEOM     BASIS   MCVARS    GRID      UKS  
+
+ PROGRAMS   *        TOTAL       UKS       INT
+ CPU TIMES  *        32.71     30.96      1.60
+ REAL TIME  *        33.52 SEC
+ DISK USED  *       169.15 MB      
+ **********************************************************************************************************************************
+
+
+ PROGRAM * Intrinsic Basis Bonding Analysis (IBBA)          Author: G. Knizia
+
+ Molecular orbitals read from record     2200.2  Type=UKS/ALPHA (state 1.1)
+ Fock matrix read from record            2200.2  Type=UKS/TOTAL (state 1.1)
+ Orbital energies read from record       2200.2  Type=UKS/ALPHA (state 1.1)
+ Density matrix read from record         2200.2  Type=UKS/CHARGE (state 1.1)
+
+ Number of core orbitals:           4 (   4 )
+ Number of closed-shell orbitals:  13 (  13 )
+
+ Basis set MINAO-AUTO-PP generated.      Number of basis functions:   28 
+
+ Polarized AO type:                A = (O Ot + (1-O)(1-Ot)) P12
+ Orthogonalization method:         Symmetric (Loewdin)
+ Localization functional:          L = sum[A,i] <i|n_A|i>^4 -> max
+
+ Localization group 1:  17 orbitals, occupancy  2.000
+ Iterative localization: IB/PM,    7 iter; Final gradient 0.21E-09
+
+ Bond order analysis:       [THRPRINT= 0.020]
+
+   CEN ATOM   CEN ATOM     WIBERG.BO      RENORM.BO
+     1   C  -   2   O       0.988875       1.021597
+     1   C  -   6   H       0.957519       0.975675
+     1   C  -   8   H       0.948120       0.933478
+     1   C  -   7   H       0.948120       0.933478
+
+     2   O  -   1   C       0.988875       1.021597
+     2   O  -   3   C       0.966385       0.991034
+     2   O  -   7   H       0.035381       0.021092
+     2   O  -   8   H       0.035381       0.021092
+     2   O  -   9   H       0.031985       0.018974
+     2   O  -  10   H       0.031985       0.018974
+
+     3   C  -   4   C       1.032985       1.024001
+     3   C  -   2   O       0.966385       0.991034
+     3   C  -   9   H       0.935354       0.920365
+     3   C  -  10   H       0.935354       0.920365
+
+     4   C  -   3   C       1.032985       1.024001
+     4   C  -   5   H       0.961912       0.989034
+     4   C  -  12   H       0.958472       0.980587
+     4   C  -  11   H       0.958472       0.980587
+
+     5   H  -   4   C       0.961912       0.989034
+
+     6   H  -   1   C       0.957519       0.975675
+
+     7   H  -   1   C       0.948120       0.933478
+     7   H  -   2   O       0.035381       0.021092
+
+     8   H  -   1   C       0.948120       0.933478
+     8   H  -   2   O       0.035381       0.021092
+
+     9   H  -   3   C       0.935354       0.920365
+     9   H  -   2   O       0.031985       0.018974
+
+    10   H  -   3   C       0.935354       0.920365
+    10   H  -   2   O       0.031985       0.018974
+
+    11   H  -   4   C       0.958472       0.980587
+
+    12   H  -   4   C       0.958472       0.980587
+
+
+ Valency analysis:
+
+   CEN ATOM   TOT.VALENCE
+     1   C       3.863111
+     2   O       2.124444
+     3   C       3.893750
+     4   C       3.939094
+     5   H       0.981411
+     6   H       0.978018
+     7   H       0.987787
+     8   H       0.987787
+     9   H       0.989721
+    10   H       0.989721
+    11   H       0.980239
+    12   H       0.980239
+
+ Total charge composition:
+
+   CEN ATOM         s          p       ELECTRONS ->P.CHARGE
+     1   C       3.03148    3.14929      6.18077   -0.18077
+     2   O       3.61651    4.77337      8.38988   -0.38988
+     3   C       2.99418    3.02326      6.01744   -0.01744
+     4   C       3.03413    3.36733      6.40145   -0.40145
+     5   H       0.86366                 0.86366    0.13634
+     6   H       0.85174                 0.85174    0.14826
+     7   H       0.88949                 0.88949    0.11051
+     8   H       0.88949                 0.88949    0.11051
+     9   H       0.89861                 0.89861    0.10139
+    10   H       0.89861                 0.89861    0.10139
+    11   H       0.85943                 0.85943    0.14057
+    12   H       0.85943                 0.85943    0.14057
+
+ Total charge composition, AO contributions:
+
+   CEN ATOM SHL      SPHERICAL COMPONENTS
+     1   C  1s       1.99150
+     1   C  2s       1.03998
+     1   C  2p       1.17964    1.16199    0.80765
+
+     2   O  1s       1.99703
+     2   O  2s       1.61948
+     2   O  2p       1.51352    1.89988    1.35996
+
+     3   C  1s       1.99177
+     3   C  2s       1.00241
+     3   C  2p       0.85309    1.14905    1.02112
+
+     4   C  1s       1.99068
+     4   C  2s       1.04345
+     4   C  2p       1.15576    1.16483    1.04674
+
+     5   H  1s       0.86366
+
+     6   H  1s       0.85174
+
+     7   H  1s       0.88949
+
+     8   H  1s       0.88949
+
+     9   H  1s       0.89861
+
+    10   H  1s       0.89861
+
+    11   H  1s       0.85943
+
+    12   H  1s       0.85943
+
+ Summary of localized orbital composition:   [THRPRINT= 0.020]
+
+   ORB  GRP  ORB.ENERGY      CENTERS/CHARGES
+     1   1   -18.814749      O  2   2.000
+     2   1    -9.998913      C  3   2.000
+     3   1    -9.989549      C  1   2.000
+     4   1    -9.934907      C  4   2.000
+     5   1    -0.717263      O  2   1.258   C  1   0.732
+     6   1    -0.709780      O  2   1.267   C  3   0.719
+     7   1    -0.550976      C  3   1.004   C  4   0.989
+     8   1    -0.527337      O  2   1.962   (other: 0.038)
+     9   1    -0.479521      C  1   1.149   H  6   0.844
+    10   1    -0.479342      C  1   1.130   H  8   0.868
+    11   1    -0.479342      C  1   1.130   H  7   0.868
+    12   1    -0.475258      C  3   1.116   H 10   0.874
+    13   1    -0.475258      C  3   1.116   H  9   0.874
+    14   1    -0.462271      C  4   1.127   H  5   0.857
+    15   1    -0.456218      C  4   1.136   H 11   0.853
+    16   1    -0.456218      C  4   1.136   H 12   0.853
+    17   1    -0.264447      O  2   1.900   C  1   0.021   C  3   0.020   (other: 0.060)
+
+ Localized orbitals saved to record      2200.2  (orbital set 4)
+
+
+ **********************************************************************************************************************************
+ DATASETS  * FILE   NREC   LENGTH (MB)   RECORD NAMES
+              1      20       64.33       500      610      700      900      950      970     1000      129      960     1100   
+                                          VAR    BASINP    GEOM    SYMINP    ZMAT    AOBASIS   BASIS     P2S    ABASIS      S 
+                                         1400     1410     1200     1210     1080     1600     1650     1300     1700     1800   
+                                           T        V       H0       H01     AOSYM     SMH    MOLCAS    ERIS     OPER     GRID   
+
+              2       5        3.40       700     1000      520     1800     2200   
+                                         GEOM     BASIS   MCVARS    GRID      UKS  
+
+ PROGRAMS   *        TOTAL      IBBA       UKS       INT
+ CPU TIMES  *        32.74      0.03     30.96      1.60
+ REAL TIME  *        33.63 SEC
+ DISK USED  *       169.15 MB      
+ **********************************************************************************************************************************
+ Molecular orbitals read from record     2200.2  Type=UKS/LOCAL(IBO)  
+ Occupation numbers read from record     2200.2  Type=UKS/LOCAL(IBO)  
+ Orbital energies read from record       2200.2  Type=UKS/LOCAL(IBO)  
+ Redundancy group numbers read from rec  2200.2  Type=UKS/BETA (state 1.1)
+
+ IBBA/SVP energy=      0.000000000000
+
+        UKS-SCF 
+   -194.16565015
+ **********************************************************************************************************************************
+ Molpro calculation terminated

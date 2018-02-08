@@ -1,0 +1,14 @@
+ 
+#P m11/Gen 
+# SCF=(Tight,XQC)
+# Integral(Grid=UltraFine)
+# IOp(8/10=90, 8/10=1, 5/33=1) Stable=opt
+
+OH-6dub3
+
+0,2
+O,0.,0.,-0.109212493
+H,0.,0.,0.8736999437
+
+@./mg3s.gbs
+
