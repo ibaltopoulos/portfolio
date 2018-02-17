@@ -2,6 +2,7 @@ import numpy as np
 import glob
 import pandas as pd
 import sys
+import matplotlib.pyplot as plt
 
 
 def molpro_parse(filename):
@@ -63,6 +64,8 @@ def parse_molpro(filenames):
         unrestricted_flags.append(unrestricted)
         energies.append(energy)
         timings.append(time)
+    # hartree to kcal/mol
+    energies = np.asarray(energies) * 627.509
 
     d = {"molecule": molecules,
             "functional": functionals,
@@ -127,15 +130,17 @@ def parse_molpro(filenames):
     return df
 
 def print_missing(df):
-    print(df.loc[(df.energy.isnull())])
+    missing = df.loc[(df.energy.isnull())]
+    if missing.size > 0:
+        print(missing)
 
 def parse_reactions(reaction_filename, df):
     # sort so the order for the reactions are correct
     df.sort_values(['functional', 'basis', 'unrestricted', 'molecule'], inplace=True)
     # make new dataframe for the reactions with the same structure as df
     dfr = pd.DataFrame.from_items([(name, pd.Series(data=None, dtype=series.dtype)) for name, series in df.iteritems()])
-    # rename molecule to compound
-    dfr.rename(index=str, columns={'molecule':'compound'}, inplace=True)
+    # rename molecule to reaction
+    dfr.rename(index=str, columns={'molecule':'reaction'}, inplace=True)
     mol_list = df.molecule.unique().tolist()
     with open(reaction_filename) as f:
         lines = f.readlines()
@@ -150,11 +155,11 @@ def parse_reactions(reaction_filename, df):
             reaction_name = "+".join(reactants) + "->" + "+".join(products)
 
             df_reaction = df.loc[df.molecule == reactants[0]].copy()
-            df_reaction.rename(index=str, columns={'molecule':'compound'}, inplace=True)
+            df_reaction.rename(index=str, columns={'molecule':'reaction'}, inplace=True)
             # set energy and time to 0 makes the next part a bit easier
             df_reaction.energy = 0
             df_reaction.time = 0
-            df_reaction['compound'] = pd.Series([reaction_name]*(len(df_reaction.energy.tolist())), index=df_reaction.index) #df_reaction.assign('compound'=pd.Series([reaction_name for _ in range(len(df_reaction.energy.tolist()))])
+            df_reaction['reaction'] = pd.Series([reaction_name]*(len(df_reaction.energy.tolist())), index=df_reaction.index) #df_reaction.assign('reaction'=pd.Series([reaction_name for _ in range(len(df_reaction.energy.tolist()))])
             for reactant in reactants:
                 df_reaction.energy -= df.loc[df.molecule == reactant].energy.as_matrix()
                 df_reaction.time += df.loc[df.molecule == reactant].time.as_matrix()
@@ -162,32 +167,54 @@ def parse_reactions(reaction_filename, df):
                 df_reaction.energy += df.loc[df.molecule == product].energy.as_matrix()
                 df_reaction.time += df.loc[df.molecule == product].time.as_matrix()
 
-            dfr = dfr.append(df_reaction, ignore_index = True)
+            # subtract uCCSD reference
+            df_reaction2 = df_reaction.loc[df_reaction.functional != 'uCCSD']
+            df_reaction2 = df_reaction2.assign(energy = lambda x: x.energy-df_reaction.loc[df_reaction.functional == 'uCCSD'].energy.as_matrix()[0])
+
+            dfr = dfr.append(df_reaction2, ignore_index = True)
     return dfr
 
 
-
-
-
-def main(df_name = None):
-    data_set_name = "ABDE12"
-    if is_none(df_name):
-        filenames = glob.glob("../portfolio_dataset/*.out")
+def main(mol_df_name = None, reac_df_name = None):
+    data_set_name = "abde12"
+    if is_none(mol_df_name):
+        filenames = glob.glob("../portfolio_datasets/%s/*.out" % data_set_name)
         mol_df = parse_molpro(filenames)
+        # SOGGA11 doesn't converge for hydrogen
+        mol_df = mol_df[(mol_df.functional != "SOGGA11") & (mol_df.functional != "SOGGA11-X")]
         print_missing(mol_df)
         mol_df.to_pickle(data_set_name+'_mol.pkl')
     else:
-        mol_df = pd.read_pickle(df_name)
-    reac_df = parse_reactions("abde12_reactions", mol_df)
-    reac_df['dataset'] = data_set_name
-    reac_df.to_pickle(data_set_name+'_reac.pkl')
-    print(reac_df.head())
+        mol_df = pd.read_pickle(mol_df_name)
+    if is_none(reac_df_name):
+        reac_df = parse_reactions("%s_reactions" % data_set_name, mol_df)
+        reac_df['dataset'] = data_set_name
+        reac_df.to_pickle(data_set_name+'_reac.pkl')
+    else:
+        reac_df = pd.read_pickle(reac_df_name)
+
+    pd.options.display.max_rows = 9999999
+    print(reac_df.loc[(reac_df.functional == 'M06-2X') & (reac_df.basis == 'qzvp') & (reac_df.unrestricted == True)])
+    #uniq_functional = reac_df.functional.unique()
+    #uniq_basis = reac_df.basis.unique()
+    #uniq_reaction = reac_df.reaction.unique()
+    #for b in ['qzvp']:
+    #    for f in uniq_functional:
+    #        df = reac_df.loc[(reac_df.functional == f) & (reac_df.basis == b) & (reac_df.unrestricted == True)]
+    #        df.plot(x='reaction', y='energy')
+    #    plt.show()
+    #    quit()
+
+    #for c in uniq_compound:
+    #    df_c = df.loc[df.compound == c]
 
     #df.to_pickle('lol.pkl')
 
 if __name__ == "__main__":
     if len(sys.argv) == 2:
         main(sys.argv[1])
+    elif len(sys.argv) == 3:
+        main(*sys.argv[1:])
     else:
         main()
 
