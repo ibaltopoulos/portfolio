@@ -193,8 +193,8 @@ def main(mol_df_name = None, reac_df_name = None):
     else:
         reac_df = pd.read_pickle(reac_df_name)
 
-    pd.options.display.max_rows = 9999999
-    print(reac_df.loc[(reac_df.functional == 'M06-2X') & (reac_df.basis == 'qzvp') & (reac_df.unrestricted == True)])
+    #pd.options.display.max_rows = 9999999
+    #print(reac_df.loc[(reac_df.functional == 'M06-2X') & (reac_df.basis == 'qzvp') & (reac_df.unrestricted == True)])
     #uniq_functional = reac_df.functional.unique()
     #uniq_basis = reac_df.basis.unique()
     #uniq_reaction = reac_df.reaction.unique()
