@@ -38,7 +38,7 @@ def filename_parse(filename):
 
     return mol, func, basis, unrestricted
 
-def parse_molpro(filenames):
+def parse_molpro(filenames, data_set):
 
     molecules = []
     functionals = []
@@ -51,12 +51,13 @@ def parse_molpro(filenames):
         if energy == None:
             continue
         mol, func, basis, unrestricted = filename_parse(filename)
-        # redundancy in the dataset
-        if mol == 'C2H6':
-            mol = 'Et-H'
-        # Remove trailing -
-        if mol[-1] == "-":
-            mol = mol[:-1]
+        if data_set == "abde12":
+            # redundancy in the dataset
+            if mol == 'C2H6':
+                mol = 'Et-H'
+            # Remove trailing -
+            if mol[-1] == "-":
+                mol = mol[:-1]
 
         molecules.append(mol)
         functionals.append(func)
@@ -98,7 +99,7 @@ def parse_molpro(filenames):
                     missing_mols.append(mol)
                     missing_functional.append(func)
                     missing_basis.append(basis)
-                    missing_unrestricted.append(unres)
+                    missing_unrestricted.append(False)
                 elif sub.size != 6:
                     quit("Missed something")
                 continue
@@ -129,9 +130,10 @@ def parse_molpro(filenames):
 
     return df
 
-def print_missing(df):
+def print_missing(df, name):
     missing = df.loc[(df.energy.isnull())]
     if missing.size > 0:
+        print("Missing elements in the %s data set" % name)
         print(missing)
 
 def parse_reactions(reaction_filename, df):
@@ -145,6 +147,8 @@ def parse_reactions(reaction_filename, df):
     with open(reaction_filename) as f:
         lines = f.readlines()
         for line in lines:
+            if line.startswith("#"):
+                continue
             reactants, products = line.split(";")
             reactants = reactants.split()
             products = products.split()
@@ -174,26 +178,42 @@ def parse_reactions(reaction_filename, df):
             dfr = dfr.append(df_reaction2, ignore_index = True)
     return dfr
 
+def make_pickles(data_set_name, data_set_path = "../portfolio_datasets/"):
+    path = data_set_path + "/" + data_set_name
+    mol_df_name = data_set_name + "_mol.pkl"
+    reac_df_name = data_set_name + "_reac.pkl"
 
-def main(mol_df_name = None, reac_df_name = None):
-    data_set_name = "abde12"
-    if is_none(mol_df_name):
-        filenames = glob.glob("../portfolio_datasets/%s/*.out" % data_set_name)
-        mol_df = parse_molpro(filenames)
+    # Try to read the data set pickle, else make it.
+    try:
+        mol_df = pd.read_pickle(mol_df_name)
+    except FileNotFoundError:
+        filenames = glob.glob(path + "/*.out")
+        mol_df = parse_molpro(filenames, data_set_name)
         # SOGGA11 doesn't converge for hydrogen
         mol_df = mol_df[(mol_df.functional != "SOGGA11") & (mol_df.functional != "SOGGA11-X")]
-        print_missing(mol_df)
-        mol_df.to_pickle(data_set_name+'_mol.pkl')
-    else:
-        mol_df = pd.read_pickle(mol_df_name)
-    if is_none(reac_df_name):
-        reac_df = parse_reactions("%s_reactions" % data_set_name, mol_df)
-        reac_df['dataset'] = data_set_name
-        reac_df.to_pickle(data_set_name+'_reac.pkl')
-    else:
-        reac_df = pd.read_pickle(reac_df_name)
+        print_missing(mol_df, data_set_name)
+        mol_df.to_pickle(mol_df_name)
 
-    #pd.options.display.max_rows = 9999999
+
+    # Try to read the reaction pickle, else make it.
+    try:
+        reac_df = pd.read_pickle(reac_df_name)
+    except FileNotFoundError:
+        reac_df = parse_reactions(data_set_name + "_reactions", mol_df)
+        reac_df['dataset'] = data_set_name
+        reac_df.to_pickle(reac_df_name)
+    return reac_df
+
+def main():
+    abde12_reac = make_pickles("abde12")
+    nhtbh38_reac = make_pickles("nhtbh38")
+
+    # combine
+    df = abde12_reac.append(nhtbh38_reac, ignore_index = True)
+    df.to_pickle("combined_reac.pkl")
+
+
+
     #print(reac_df.loc[(reac_df.functional == 'M06-2X') & (reac_df.basis == 'qzvp') & (reac_df.unrestricted == True)])
     #uniq_functional = reac_df.functional.unique()
     #uniq_basis = reac_df.basis.unique()
@@ -211,12 +231,7 @@ def main(mol_df_name = None, reac_df_name = None):
     #df.to_pickle('lol.pkl')
 
 if __name__ == "__main__":
-    if len(sys.argv) == 2:
-        main(sys.argv[1])
-    elif len(sys.argv) == 3:
-        main(*sys.argv[1:])
-    else:
-        main()
+    main()
 
     #df.loc[(df.energy.isnull())].to_csv('missing')
     #d = {}
