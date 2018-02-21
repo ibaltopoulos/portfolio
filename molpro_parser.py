@@ -175,6 +175,13 @@ def parse_reactions(reaction_filename, df):
             df_reaction2 = df_reaction.loc[df_reaction.functional != 'uCCSD']
             df_reaction2 = df_reaction2.assign(energy = lambda x: x.energy-df_reaction.loc[df_reaction.functional == 'uCCSD'].energy.as_matrix()[0])
 
+            # Make sure that reaction energy is negative
+            df_tmp = df_reaction.loc[(df_reaction.functional == 'uCCSD') & (df_reaction.energy > 0)]
+            if df_tmp.size > 0:
+                print("Reverse reaction way of")
+                print(df_tmp)
+
+
             dfr = dfr.append(df_reaction2, ignore_index = True)
     return dfr
 
