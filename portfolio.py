@@ -74,19 +74,12 @@ class Estimators(object):
     Estimators for covariance and/or means
     """
 
-    def __init__(self, mean_estimator = 'mle', cov_estimator = 'mle', var_estimator = 'mle'):
-        self._initialise_weights(3)
-        print(self.weights)
-        quit()
-        pass
-        #self.mean = self._get_mean(mean_estimator)
+    def __init__(self, mean_estimator = 'mle', cov_estimator = 'mle'):
+        self.mean = self._get_mean(mean_estimator)
+        print(self.n_assets, self.n_samples)
+        quit(self.mean.shape)
         #self.corr = self.get_mle_corr()
 
-    def _initialise_weights(self, n):
-        m = sklearn.mixture.GaussianMixture(n_components = n, covariance_type = 'tied', init_params = 'kmeans')
-        m.fit(self.x)
-        prior = np.ones((self.n_samples, n))/n
-        self.weights = m.predict_proba(self.x)*0.5 + prior*0.5
 
     def get_mle_covariance(self, x = None, ddof = 1):
         """
@@ -221,11 +214,11 @@ class Estimators(object):
         self.mean = self._get_mean()
         self.cov = self._get_cov()
 
-    def _get_mean(self):
-        if self.mean == 'mle':
+    def _get_mean(self, mean_estimator):
+        if mean_estimator == 'mle':
             return self.get_mle_mean()
-        elif isinstance(self.mean, str):
-            quit("Error: Unknown strategy %s for getting means" % self.mean)
+        else:
+            quit("Error: Unknown strategy %s for getting means" % mean_estimator)
 
     def _get_cov(self):
         if self.cov == 'mle':
@@ -242,11 +235,6 @@ class Estimators(object):
     def naive_bayes_mean(self):
         pass
 
-class Clustering(object):
-    def __init__(self, x):
-        self.x = x
-
-
 
 class Portfolio(Estimators):
     """
@@ -254,7 +242,7 @@ class Portfolio(Estimators):
     """
 
     def __init__(self, df = None, x = None, cost = None, classes = None, mean_estimator = 'mle',
-            var_estimator = 'mle', cov_estimator = 'mle', portfolio_estimator = 'zero_mean_min_variance',
+            cov_estimator = 'mle', portfolio_estimator = 'zero_mean_min_variance',
             positive_constraint = False, min_upper_bound__n = 1, n_mixtures = 1, scaling = False):
 
         self.x = x
@@ -274,7 +262,7 @@ class Portfolio(Estimators):
         self.n_assets = self.x.shape[1]
 
         super(Portfolio, self).__init__(mean_estimator = mean_estimator, 
-                var_estimator = var_estimator, cov_estimator = cov_estimator)
+                cov_estimator = cov_estimator)
         quit()
 
         self.optimal_portfolio = self.get_optimal_portfolio()
@@ -284,8 +272,6 @@ class Portfolio(Estimators):
         Fit multivariate normals to the energies under the assumption
         that the data is described by n mixtures.
         """
-
-
 
 
     def _pandas_parser(self, df):

@@ -197,7 +197,7 @@ def make_pickles(data_set_name, data_set_path = "../portfolio_datasets/"):
         filenames = glob.glob(path + "/*.out")
         mol_df = parse_molpro(filenames, data_set_name)
         # SOGGA11 doesn't converge for hydrogen
-        mol_df = mol_df[(mol_df.functional != "SOGGA11") & (mol_df.functional != "SOGGA11-X")]
+        mol_df = mol_df.loc[(mol_df.functional != "SOGGA11") & (mol_df.functional != "SOGGA11-X")]
         print_missing(mol_df, data_set_name)
         mol_df.to_pickle(mol_df_name)
 
@@ -208,6 +208,7 @@ def make_pickles(data_set_name, data_set_path = "../portfolio_datasets/"):
     except FileNotFoundError:
         reac_df = parse_reactions(data_set_name + "_reactions", mol_df)
         reac_df['dataset'] = data_set_name
+        set_median_timings(reac_df)
         reac_df.to_pickle(reac_df_name)
     return reac_df
 
@@ -232,16 +233,13 @@ def set_median_timings(df):
 
                 # Get the median time and set it.
                 time = np.median(gga_df.time.as_matrix())
-                gga_df.assign(time = lambda x: time)
+                df.at[gga_df.index, "time"] = time
                 time = np.median(hybrid_df.time.as_matrix())
-                hybrid_df.assign(time = lambda x: time)
+                df.at[hybrid_df.index, "time"] = time
                 time = np.median(meta_df.time.as_matrix())
-                meta_df.assign(time = lambda x: time)
+                df.at[meta_df.index, "time"] = time
                 time = np.median(hybrid_meta_df.time.as_matrix())
-                hybrid_meta_df.assign(time = lambda x: time)
-                print(df.loc[(df.reaction == reac) & (df.basis == bas) & (df.unrestricted == un)].head(1000))
-            quit()
-
+                df.at[hybrid_meta_df.index, "time"] = time
 
 def main():
     abde12_reac = make_pickles("abde12")
@@ -252,48 +250,5 @@ def main():
     df.to_pickle("combined_reac.pkl")
 
 
-
-    #print(reac_df.loc[(reac_df.functional == 'M06-2X') & (reac_df.basis == 'qzvp') & (reac_df.unrestricted == True)])
-    #uniq_functional = reac_df.functional.unique()
-    #uniq_basis = reac_df.basis.unique()
-    #uniq_reaction = reac_df.reaction.unique()
-    #for b in ['qzvp']:
-    #    for f in uniq_functional:
-    #        df = reac_df.loc[(reac_df.functional == f) & (reac_df.basis == b) & (reac_df.unrestricted == True)]
-    #        df.plot(x='reaction', y='energy')
-    #    plt.show()
-    #    quit()
-
-    #for c in uniq_compound:
-    #    df_c = df.loc[df.compound == c]
-
-    #df.to_pickle('lol.pkl')
-
 if __name__ == "__main__":
     main()
-
-    #df.loc[(df.energy.isnull())].to_csv('missing')
-    #d = {}
-    #unique_functionals = df.functional.unique().tolist()
-    #unique_molecules = df.molecule.unique().tolist()
-    #unique_basis = df.basis.unique().tolist()
-    #print(unique_functionals)
-    #print(unique_basis)
-    #for func in unique_functionals:
-    #    for basis in unique_basis:
-    #        for unres in True, False:
-    #            sub = df.loc[(df.functional == func) & (df.basis == basis) & (df.unrestricted == unres) & (df.energy.isnull())]
-    #            if sub.size == 0:
-    #                pass
-    #            else:
-    #                if sub.size not in d: d[sub.size] = 0
-    #                d[sub.size] += 1
-    #            #if sub.size == 126:
-    #            #    print(func, basis, unres)
-    #            if sub.size == 6:
-    #                print( sub)
-    #                #for mol in unique_molecules:
-    #                #    sub = df.loc[(df.molecule == mol) & (df.functional == func) & (df.basis == basis) & (df.unrestricted == unres)]
-    #                #    if sub.size != 6:
-    #                #        print(mol)
-
