@@ -11,6 +11,7 @@ import sklearn.covariance
 import sklearn.model_selection
 import warnings
 import pomegranate
+import sys
 
 def get_random_matrix(n_samples, n_features):
     cov = datasets.make_spd_matrix(n_features)
@@ -47,6 +48,7 @@ class NaiveBayesRegression(object):
     def __init__(self):
         pass
 
+    # TODO fix
     def fit(self, x, distributions, n_nodes = 3):
         """
         Fit the hidden bayes model.
@@ -55,6 +57,14 @@ class NaiveBayesRegression(object):
             features follows. Can be any singlevariate distribution from pomegranate
 
         """
+
+        init_dist = []
+        for i, dist in enumerate(distributions):
+            if isinstance(dist, DiscreteDistribution):
+                pass
+
+
+        product_distribution = pomegranate.distributions.IndependentComponentsDistribution()
 
         self.model = pomegranate.GeneralMixtureModel.from_samples(distributions, n_components = n_nodes, X = x)
 
@@ -359,24 +369,23 @@ class Portfolio(Estimators):
         sol = solvers.qp(P, q, G, h, A, b)
         return np.asarray(sol['x']).ravel()
 
+if __name__ == "__main__":
 
-np.random.seed(42)
-#true_cov, true_mu, x = get_random_matrix(20, 40)
-#x += np.random.normal(0, 1e-6, x.shape)
-x = pd.read_pickle('lol.pkl')
-print(x.head())
+    if len(sys.argv) == 1:
+        "Example usage: python portfolio abde12_reac.pkl"
 
-quit()
+    df = pd.read_pickle(sys.argv[1])
 
-e = Estimators(x)
-#cov = e.get_gl_covariance_cv()
-#print(kl_divergence(true_mu, true_cov, true_mu, cov))
-#cov = e.get_shrunk_covariance_cv()
-#print(kl_divergence(true_mu, true_cov, true_mu, cov))
-cov = e.get_oas_covariance()
-print(kl_divergence(true_mu, true_cov, true_mu, cov))
-cov = e.get_mincovdet_covariance()
-print(kl_divergence(true_mu, true_cov, true_mu, cov))
-#p = Portfolio(x, positive = 0, cov='mle', portfolio = 'hrp', min_upper_bound__n = 4)
-#print(p.optimal_portfolio)
+
+    e = Estimators(x)
+    #cov = e.get_gl_covariance_cv()
+    #print(kl_divergence(true_mu, true_cov, true_mu, cov))
+    #cov = e.get_shrunk_covariance_cv()
+    #print(kl_divergence(true_mu, true_cov, true_mu, cov))
+    cov = e.get_oas_covariance()
+    print(kl_divergence(true_mu, true_cov, true_mu, cov))
+    cov = e.get_mincovdet_covariance()
+    print(kl_divergence(true_mu, true_cov, true_mu, cov))
+    #p = Portfolio(x, positive = 0, cov='mle', portfolio = 'hrp', min_upper_bound__n = 4)
+    #print(p.optimal_portfolio)
 
