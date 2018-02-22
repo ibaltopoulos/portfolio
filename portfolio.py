@@ -9,15 +9,16 @@ import pandas as pd
 import random
 import sklearn.covariance
 import sklearn.model_selection
+import sklearn.mixture
 import warnings
 import pomegranate
 import sys
 
-def get_random_matrix(n_samples, n_features):
-    cov = datasets.make_spd_matrix(n_features)
-    means = (np.random.random(n_features) - 0.5) * 5
-    x = np.random.multivariate_normal(means, cov, n_samples)
-    return cov, means, x
+#def get_random_matrix(n_samples, n_features):
+#    cov = datasets.make_spd_matrix(n_features)
+#    means = (np.random.random(n_features) - 0.5) * 5
+#    x = np.random.multivariate_normal(means, cov, n_samples)
+#    return cov, means, x
 
 def multivariate_normal_pdf(x, mu, cov):
     return ss.multivariate_normal.pdf(x, mu, cov)
@@ -68,22 +69,24 @@ class NaiveBayesRegression(object):
 
         self.model = pomegranate.GeneralMixtureModel.from_samples(distributions, n_components = n_nodes, X = x)
 
-
-
 class Estimators(object):
     """
     Estimators for covariance and/or means
     """
 
-    def __init__(self, x, mean = 'mle', cov = 'mle'):
-        self.x = np.asarray(x)
-        self.n_samples = x.shape[0]
-        self.n_assets = x.shape[1]
-        self.mean = mean
-        self.cov = cov
+    def __init__(self, mean_estimator = 'mle', cov_estimator = 'mle', var_estimator = 'mle'):
+        self._initialise_weights(3)
+        print(self.weights)
+        quit()
+        pass
+        #self.mean = self._get_mean(mean_estimator)
+        #self.corr = self.get_mle_corr()
 
-        self._set_mean_and_cov()
-        self.corr = self.get_mle_corr()
+    def _initialise_weights(self, n):
+        m = sklearn.mixture.GaussianMixture(n_components = n, covariance_type = 'tied', init_params = 'kmeans')
+        m.fit(self.x)
+        prior = np.ones((self.n_samples, n))/n
+        self.weights = m.predict_proba(self.x)*0.5 + prior*0.5
 
     def get_mle_covariance(self, x = None, ddof = 1):
         """
@@ -239,20 +242,79 @@ class Estimators(object):
     def naive_bayes_mean(self):
         pass
 
+class Clustering(object):
+    def __init__(self, x):
+        self.x = x
+
+
+
 class Portfolio(Estimators):
     """
-    For creating portfolios
+    For creating portfolios.
     """
 
-    def __init__(self, x, mean = 'mle', cov = 'mle', portfolio = 'zero_mean_min_variance', 
-            positive = False, min_upper_bound__n = 1):
-        super(Portfolio, self).__init__(x = x, mean = mean, cov = cov)
+    def __init__(self, df = None, x = None, cost = None, classes = None, mean_estimator = 'mle',
+            var_estimator = 'mle', cov_estimator = 'mle', portfolio_estimator = 'zero_mean_min_variance',
+            positive_constraint = False, min_upper_bound__n = 1, n_mixtures = 1, scaling = False):
 
-        self.positive = positive
-        self.portfolio = portfolio
-        self.min_upper_bound__n = min_upper_bound__n
+        self.x = x
+        self.cost = cost
+        self.classes = classes
+        self.positive_constraint = positive_constraint
+        self.portfolio_estimator = portfolio_estimator
+        #self.min_upper_bound__n = min_upper_bound__n
+
+        # preprocess if a pandas dataframe was given
+        self._pandas_parser(df)
+        # Get mixture weights if n_mixture > 1
+        #self._get_mixture_weights(n_mixtures)
+
+
+        self.n_samples = self.x.shape[0]
+        self.n_assets = self.x.shape[1]
+
+        super(Portfolio, self).__init__(mean_estimator = mean_estimator, 
+                var_estimator = var_estimator, cov_estimator = cov_estimator)
+        quit()
 
         self.optimal_portfolio = self.get_optimal_portfolio()
+
+    def _get_mixture_weights(self, n):
+        """
+        Fit multivariate normals to the energies under the assumption
+        that the data is described by n mixtures.
+        """
+
+
+
+
+    def _pandas_parser(self, df):
+        if is_none(df):
+            return
+        unique_reactions = df.reaction.unique()
+        unique_basis = df.basis.unique()
+        unique_functionals = df.functional.unique()
+
+        basis_to_id = {key:value for value, key in enumerate(unique_basis)}
+        func_to_id = {key:value for value, key in enumerate(unique_functionals)}
+        unres_to_id = {True: 1, False: 0}
+
+        energies = []
+        times = []
+        for idx, reac in enumerate(unique_reactions):
+            sub_df = df.loc[df.reaction == reac]
+            energies.append(sub_df.energy.tolist())
+            times.append(sub_df.time.tolist())
+            if idx == 0:
+                func = [func_to_id[x] for x in sub_df.functional.tolist()]
+                bas = [basis_to_id[x] for x in sub_df.basis.tolist()]
+                unres = [unres_to_id[x] for x in sub_df.unrestricted.tolist()]
+                classes = np.asarray([func, bas, unres], dtype=int)
+
+        self.x = np.asarray(energies)
+        self.cost = np.asarray(times)
+        self.classes = classes
+
 
     def get_optimal_portfolio(self):
         if self.portfolio == 'zero_mean_min_variance':
@@ -375,17 +437,6 @@ if __name__ == "__main__":
         "Example usage: python portfolio abde12_reac.pkl"
 
     df = pd.read_pickle(sys.argv[1])
+    Portfolio(df = df)
 
-
-    e = Estimators(x)
-    #cov = e.get_gl_covariance_cv()
-    #print(kl_divergence(true_mu, true_cov, true_mu, cov))
-    #cov = e.get_shrunk_covariance_cv()
-    #print(kl_divergence(true_mu, true_cov, true_mu, cov))
-    cov = e.get_oas_covariance()
-    print(kl_divergence(true_mu, true_cov, true_mu, cov))
-    cov = e.get_mincovdet_covariance()
-    print(kl_divergence(true_mu, true_cov, true_mu, cov))
-    #p = Portfolio(x, positive = 0, cov='mle', portfolio = 'hrp', min_upper_bound__n = 4)
-    #print(p.optimal_portfolio)
 
