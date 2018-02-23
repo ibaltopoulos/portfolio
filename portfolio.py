@@ -13,6 +13,7 @@ import sklearn.mixture
 import warnings
 import pomegranate
 import sys
+import matplotlib.pyplot as plt
 
 #def get_random_matrix(n_samples, n_features):
 #    cov = datasets.make_spd_matrix(n_features)
@@ -75,9 +76,9 @@ class Estimators(object):
     """
 
     def __init__(self, mean_estimator = 'mle', cov_estimator = 'mle'):
-        self.mean = self._get_mean(mean_estimator)
-        print(self.n_assets, self.n_samples)
-        quit(self.mean.shape)
+        self.mean_estimator = mean_estimator
+        self.cov_estimator = cov_estimator
+        self._set_mean_and_cov()
         #self.corr = self.get_mle_corr()
 
 
@@ -214,20 +215,20 @@ class Estimators(object):
         self.mean = self._get_mean()
         self.cov = self._get_cov()
 
-    def _get_mean(self, mean_estimator):
-        if mean_estimator == 'mle':
+    def _get_mean(self):
+        if self.mean_estimator == 'mle':
             return self.get_mle_mean()
         else:
-            quit("Error: Unknown strategy %s for getting means" % mean_estimator)
+            quit("Error: Unknown strategy %s for getting means" % self.mean_estimator)
 
     def _get_cov(self):
-        if self.cov == 'mle':
+        if self.cov_estimator == 'mle':
             return self.get_mle_covariance()
-        elif self.cov == 'oas':
+        elif self.cov_estimator == 'oas':
             return self.get_oas_covariance()
-        elif self.cov == 'gl':
+        elif self.cov_estimator == 'gl':
             return self.get_gl_covariance_cv()
-        elif self.cov == 'lw':
+        elif self.cov_estimator == 'lw':
             return self.get_lw_covariance()
         elif isinstance(self.cov, str):
             quit("Error: Unknown strategy %s for getting covariance" % self.cov)
@@ -242,15 +243,15 @@ class Portfolio(Estimators):
     """
 
     def __init__(self, df = None, x = None, cost = None, classes = None, mean_estimator = 'mle',
-            cov_estimator = 'mle', portfolio_estimator = 'zero_mean_min_variance',
-            positive_constraint = False, min_upper_bound__n = 1, n_mixtures = 1, scaling = False):
+            cov_estimator = 'mle', portfolio = 'zero_mean_min_variance',
+            positive_constraint = False, upper_mean_bound = 1, n_mixtures = 1, scaling = False):
 
         self.x = x
         self.cost = cost
         self.classes = classes
         self.positive_constraint = positive_constraint
-        self.portfolio_estimator = portfolio_estimator
-        #self.min_upper_bound__n = min_upper_bound__n
+        self.portfolio = portfolio
+        self.upper_mean_bound = upper_mean_bound
 
         # preprocess if a pandas dataframe was given
         self._pandas_parser(df)
@@ -263,7 +264,6 @@ class Portfolio(Estimators):
 
         super(Portfolio, self).__init__(mean_estimator = mean_estimator, 
                 cov_estimator = cov_estimator)
-        quit()
 
         self.optimal_portfolio = self.get_optimal_portfolio()
 
@@ -305,18 +305,17 @@ class Portfolio(Estimators):
     def get_optimal_portfolio(self):
         if self.portfolio == 'zero_mean_min_variance':
             return self.zero_mean_min_variance()
-        elif self.portfolio == 'min_upper_bound':
-            return self.min_upper_bound()
-        elif self.portfolio == 'hrp':
-            return self.hrp()
+        elif self.portfolio == 'min_variance_upper_mean_bound':
+            return self.min_variance_upper_mean_bound()
+        elif self.portfolio == 'min_squared_mean':
+            return self.min_squared_mean()
         quit("Error: Unknown portfolio method %s" % self.portfolio)
-
 
     def zero_mean_min_variance(self):
         """
         Minimize x'Cx, where C is the covariance matrix and x is the portfolio weights.
         The constraints sum(x) = 1 and m'x = 0 is used, with m being the asset means.
-        Optionally the constraint x >= 0 is used if positive == False.
+        Optionally the constraint x >= 0 is used if self.positive_constraint == False.
         """
 
         # objective
@@ -326,7 +325,7 @@ class Portfolio(Estimators):
         #### constraints ###
 
         # optional constraint x >= 0 if positive == False
-        if self.positive:
+        if self.positive_constraint:
             G = matrix(-np.identity(self.n_assets))
             h = matrix(0.0, (self.n_assets, 1))
         else:
@@ -345,66 +344,64 @@ class Portfolio(Estimators):
         sol = solvers.qp(P, q, G, h, A, b)
         return np.asarray(sol['x']).ravel()
 
-    def opt(mu, cov):
+    def min_variance_upper_mean_bound(self):
         """
-        minimize    (x -mu )' Q (x - mu)
-        subject to  x > 0
-        where Q is the precision matrix cov^(-1)
-
-        CVXOPT minimizes    x'Px + q'x 
-        subject to          Gx <= h
-                            Ax == b
-
-        The objective can be rewritten as x'Qx - 2 mu' Q x
-        since mu' Q mu is a constant.
-
-        So gathering up the terms we have that P = Q, 
-        q' = -2 mu' Q, G = -1, A = 0, b = 0 and h = 0
-
-        mu: means of shape n_samples
-        cov: covariance matrix of shape (n_features, n_features)
-
+        Minimize x'Cx, where C is the covariance matrix and x is the portfolio weights.
+        The constraints sum(x) = 1 and |m'x| < self.upper_mean_bound is used, with m being the asset means.
+        Optionally the constraint x >= 0 is used if self.positive_constraint == False.
         """
-        from cvxopt import matrix, solvers
 
-        n_features = cov.shape[0]
-        Q = np.linalg.inv(cov)
+        ### objectives ###
+        P = matrix(self.cov)
+        q = matrix(0.0, (self.n_assets,1))
 
-        # objective
-        P = matrix(precision)
-        q = matrix(-2*mu[None, :].dot(Q))
+        #### constraints ###
 
-        # constraints
+        # |m'x| < self.upper_mean_bound as well as
+        # optional constraint x >= 0 if positive == False
+        if self.positive_constraint:
+            G = np.empty((self.n_assets + 2, self.n_assets))
+            G[:-2, :] = -np.identity(self.n_assets)
+            G[-2:, :] = self.mean
+            G[-1:, :] = -self.mean
+            G = matrix(G)
+            h = np.zeros((self.n_assets+2, 1))
+            h[-2:] = self.upper_mean_bound
+            h = matrix(h)
+        else:
+            G = np.zeros((2, self.n_assets))
+            G[0,:] = self.mean
+            G[1,:] = -self.mean
+            G = matrix(G)
+            h = np.zeros((2,1))
+            h[:] = self.upper_mean_bound
+            h = matrix(h)
 
-        G = matrix(-np.identity(n_features))
-        A = matrix(0.0, (n_features, n_features))
-        b = matrix(0.0, (n_features, 1))
-        h = matrix(0.0, (n_features, 1))
+
+        # sum(x) = 1
+        A = matrix(1.0, (1, self.n_assets))
+        b = matrix(1.0)
+
+        ### solve ###
 
         sol = solvers.qp(P, q, G, h, A, b)
         return np.asarray(sol['x']).ravel()
 
-    def min_upper_bound(self):
+    def min_squared_mean(self):
         """
-        Minimize x'(nC+mm')x, where C is the covariance matrix, x is the portfolio weights,
-        m is the asset means and n is a constant.
-        The 1d correspondence to n=1 is to minimize the 68 percentile and for n=4 the 95 percentile.
+        Minimize x'mm'x + x'Cx, where C is the covariance matrix, m being the asset means and x is the portfolio weights.
         The constraints sum(x) = 1 is used.
-        Optionally the constraint x >= 0 is used if positive == False.
+        Optionally the constraint x >= 0 is used if self.positive_constraint == False.
         """
-        n = self.min_upper_bound__n
-        # objective
-        m2 = np.dot(self.mean[:,None], self.mean[None,:])
-        # TODO remove later
-        assert(m2.size == self.n_assets**2)
 
-        P = matrix(n * self.cov + m2)
+        # objective
+        P = matrix(self.mean[:, None] * self.mean[None, :] + self.cov)
         q = matrix(0.0, (self.n_assets,1))
 
         #### constraints ###
 
         # optional constraint x >= 0 if positive == False
-        if self.positive:
+        if self.positive_constraint:
             G = matrix(-np.identity(self.n_assets))
             h = matrix(0.0, (self.n_assets, 1))
         else:
@@ -412,10 +409,58 @@ class Portfolio(Estimators):
             h = matrix(0.0)
 
         # sum(x) = 1
-        A = matrix(np.ones((1, self.n_assets)))
-        b = matrix(np.ones((1,1)))
+        A = matrix(1.0, (1, self.n_assets))
+        b = matrix(1.0)
         sol = solvers.qp(P, q, G, h, A, b)
         return np.asarray(sol['x']).ravel()
+
+def outer_cv(df):
+
+    reactions = df.reaction.unique()
+
+    portfolio_energies = []
+    for (train_idx, test_idx) in sklearn.model_selection.LeaveOneOut().split(reactions):
+        reac = reactions[test_idx[0]]
+        energies = df.loc[df.reaction == reac].energy.as_matrix()
+        timings = df.loc[df.reaction == reac].time.as_matrix()
+
+        train_df = df.loc[df.reaction != reac]
+
+        #m = Portfolio(df = train_df, positive_constraint = 1, portfolio = 'zero_mean_min_variance', upper_mean_bound = 0)
+        #m = Portfolio(df = train_df, positive_constraint = 1, portfolio = 'min_variance_upper_mean_bound', upper_mean_bound = 1)
+        m = Portfolio(df = train_df, positive_constraint = 1, portfolio = 'min_squared_mean', upper_mean_bound = 0)
+        portfolio_energy = np.sum(m.optimal_portfolio * energies)
+        portfolio_energies.append(portfolio_energy)
+
+    portfolio_energies = np.asarray(portfolio_energies)
+
+    pbe0 = df.loc[(df.functional == 'M06-2X') & (df.basis == 'qzvp') & (df.unrestricted == True)].energy.as_matrix()
+
+    fig, ax = plt.subplots()
+    print(abs(portfolio_energies).max(), np.median(abs(portfolio_energies)), np.mean(abs(portfolio_energies)))
+    print(abs(pbe0).max(), np.median(abs(pbe0)), np.mean(abs(pbe0)))
+    #ax.scatter(abs(portfolio_energies), abs(pbe0))
+
+    #lims = [
+    #np.min([ax.get_xlim(), ax.get_ylim()]),  # min of both axes
+    #np.max([ax.get_xlim(), ax.get_ylim()]),  # max of both axes
+    #]
+    #
+    ## now plot both limits against eachother
+    #ax.plot(lims, lims, 'k-', alpha=0.75, zorder=0)
+    #ax.set_aspect('equal')
+    #ax.set_xlim(lims)
+    #ax.set_ylim(lims)
+
+    #plt.show()
+
+
+
+### TODO
+# bayes (pomegranate / pymc)
+# mixtures
+# scaling
+# outer cv
 
 if __name__ == "__main__":
 
@@ -423,6 +468,8 @@ if __name__ == "__main__":
         "Example usage: python portfolio abde12_reac.pkl"
 
     df = pd.read_pickle(sys.argv[1])
-    Portfolio(df = df)
+    outer_cv(df)
+    #m = Portfolio(df = df, positive_constraint = 1)
+    #print(m.optimal_portfolio[m.optimal_portfolio > 1e-2])
 
 
