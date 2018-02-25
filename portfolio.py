@@ -3,7 +3,7 @@ from sklearn import datasets
 import scipy.stats as ss
 #from scipy.optimize import minimize
 #import sklearn
-from cvxopt import matrix, solvers
+import cvxopt
 import scipy.cluster.hierarchy as sch
 import pandas as pd
 import random
@@ -22,7 +22,7 @@ import matplotlib.pyplot as plt
 #    return cov, means, x
 
 def multivariate_normal_pdf(x, mu, cov):
-    return ss.multivariate_normal.pdf(x, mu, cov)
+    return ss.multivariate_normal.logpdf(x, mu, cov, allow_singular=True)
 
 def shannon_entropy(x, mu, cov):
     p = multivariate_normal_pdf(x, mu, cov)
@@ -265,6 +265,10 @@ class Portfolio(Estimators):
         super(Portfolio, self).__init__(mean_estimator = mean_estimator, 
                 cov_estimator = cov_estimator)
 
+        # add small number to the covariance matrix diagonal to make sure that the
+        # matrix is not singular
+        #self.cov += np.identity(self.n_assets)*1e-6
+
         self.optimal_portfolio = self.get_optimal_portfolio()
 
     def _get_mixture_weights(self, n):
@@ -319,18 +323,18 @@ class Portfolio(Estimators):
         """
 
         # objective
-        P = matrix(self.cov)
-        q = matrix(0.0, (self.n_assets,1))
+        P = cvxopt.matrix(self.cov)
+        q = cvxopt.matrix(0.0, (self.n_assets,1))
 
         #### constraints ###
 
         # optional constraint x >= 0 if positive == False
         if self.positive_constraint:
-            G = matrix(-np.identity(self.n_assets))
-            h = matrix(0.0, (self.n_assets, 1))
+            G = cvxopt.matrix(-np.identity(self.n_assets))
+            h = cvxopt.matrix(0.0, (self.n_assets, 1))
         else:
-            G = matrix(0.0, (1, self.n_assets))
-            h = matrix(0.0)
+            G = cvxopt.matrix(0.0, (1, self.n_assets))
+            h = cvxopt.matrix(0.0)
 
         # sum(x) = 1
         A1 = np.ones((1, self.n_assets))
@@ -339,9 +343,9 @@ class Portfolio(Estimators):
         A2 = self.mean.reshape(1, self.n_assets)
         b2 = np.zeros((1,1))
         # combine them
-        A = matrix(np.concatenate([A1, A2]))
-        b = matrix(np.concatenate([b1, b2]))
-        sol = solvers.qp(P, q, G, h, A, b)
+        A = cvxopt.matrix(np.concatenate([A1, A2]))
+        b = cvxopt.matrix(np.concatenate([b1, b2]))
+        sol = cvxopt.solvers.qp(P, q, G, h, A, b)
         return np.asarray(sol['x']).ravel()
 
     def min_variance_upper_mean_bound(self):
@@ -352,8 +356,8 @@ class Portfolio(Estimators):
         """
 
         ### objectives ###
-        P = matrix(self.cov)
-        q = matrix(0.0, (self.n_assets,1))
+        P = cvxopt.matrix(self.cov)
+        q = cvxopt.matrix(0.0, (self.n_assets,1))
 
         #### constraints ###
 
@@ -364,27 +368,27 @@ class Portfolio(Estimators):
             G[:-2, :] = -np.identity(self.n_assets)
             G[-2:, :] = self.mean
             G[-1:, :] = -self.mean
-            G = matrix(G)
+            G = cvxopt.matrix(G)
             h = np.zeros((self.n_assets+2, 1))
             h[-2:] = self.upper_mean_bound
-            h = matrix(h)
+            h = cvxopt.matrix(h)
         else:
             G = np.zeros((2, self.n_assets))
             G[0,:] = self.mean
             G[1,:] = -self.mean
-            G = matrix(G)
+            G = cvxopt.matrix(G)
             h = np.zeros((2,1))
             h[:] = self.upper_mean_bound
-            h = matrix(h)
+            h = cvxopt.matrix(h)
 
 
         # sum(x) = 1
-        A = matrix(1.0, (1, self.n_assets))
-        b = matrix(1.0)
+        A = cvxopt.matrix(1.0, (1, self.n_assets))
+        b = cvxopt.matrix(1.0)
 
         ### solve ###
 
-        sol = solvers.qp(P, q, G, h, A, b)
+        sol = cvxopt.solvers.qp(P, q, G, h, A, b)
         return np.asarray(sol['x']).ravel()
 
     def min_squared_mean(self):
@@ -395,23 +399,27 @@ class Portfolio(Estimators):
         """
 
         # objective
-        P = matrix(self.mean[:, None] * self.mean[None, :] + self.cov)
-        q = matrix(0.0, (self.n_assets,1))
+        P = cvxopt.matrix(self.mean[:, None] * self.mean[None, :] + self.cov)
+        q = cvxopt.matrix(0.0, (self.n_assets,1))
 
         #### constraints ###
 
         # optional constraint x >= 0 if positive == False
         if self.positive_constraint:
-            G = matrix(-np.identity(self.n_assets))
-            h = matrix(0.0, (self.n_assets, 1))
+            G = cvxopt.matrix(-np.identity(self.n_assets))
+            h = cvxopt.matrix(0.0, (self.n_assets, 1))
         else:
-            G = matrix(0.0, (1, self.n_assets))
-            h = matrix(0.0)
+            G = cvxopt.matrix(0.0, (1, self.n_assets))
+            h = cvxopt.matrix(0.0)
 
         # sum(x) = 1
-        A = matrix(1.0, (1, self.n_assets))
-        b = matrix(1.0)
-        sol = solvers.qp(P, q, G, h, A, b)
+        A = cvxopt.matrix(1.0, (1, self.n_assets))
+        b = cvxopt.matrix(1.0)
+        # suppress output
+        cvxopt.solvers.options['show_progress'] = False
+
+        # solve
+        sol = cvxopt.solvers.qp(P, q, G, h, A, b, verbose=False)
         return np.asarray(sol['x']).ravel()
 
 def outer_cv(df):
@@ -419,6 +427,7 @@ def outer_cv(df):
     reactions = df.reaction.unique()
 
     portfolio_energies = []
+    likelihoods = []
     for (train_idx, test_idx) in sklearn.model_selection.LeaveOneOut().split(reactions):
         reac = reactions[test_idx[0]]
         energies = df.loc[df.reaction == reac].energy.as_matrix()
@@ -429,16 +438,21 @@ def outer_cv(df):
         #m = Portfolio(df = train_df, positive_constraint = 1, portfolio = 'zero_mean_min_variance', upper_mean_bound = 0)
         #m = Portfolio(df = train_df, positive_constraint = 1, portfolio = 'min_variance_upper_mean_bound', upper_mean_bound = 1)
         m = Portfolio(df = train_df, positive_constraint = 1, portfolio = 'min_squared_mean', upper_mean_bound = 0)
-        portfolio_energy = np.sum(m.optimal_portfolio * energies)
+        cut = 1e-6
+        portfolio_energy = np.sum(np.clip(m.optimal_portfolio,cut, 1) / sum(np.clip(m.optimal_portfolio,cut, 1)) * energies)
         portfolio_energies.append(portfolio_energy)
+        likelihoods.append(multivariate_normal_pdf(energies, m.mean, m.cov))
 
     portfolio_energies = np.asarray(portfolio_energies)
 
     pbe0 = df.loc[(df.functional == 'M06-2X') & (df.basis == 'qzvp') & (df.unrestricted == True)].energy.as_matrix()
 
-    fig, ax = plt.subplots()
+    #plt.scatter(portfolio_energies, likelihoods)
+    #plt.show()
+
+    #fig, ax = plt.subplots()
     print(abs(portfolio_energies).max(), np.median(abs(portfolio_energies)), np.mean(abs(portfolio_energies)))
-    print(abs(pbe0).max(), np.median(abs(pbe0)), np.mean(abs(pbe0)))
+    #print(abs(pbe0).max(), np.median(abs(pbe0)), np.mean(abs(pbe0)))
     #ax.scatter(abs(portfolio_energies), abs(pbe0))
 
     #lims = [
@@ -461,6 +475,12 @@ def outer_cv(df):
 # mixtures
 # scaling
 # outer cv
+# timings
+# elastic net
+# weights > -1 / -2 etc.
+# t-distribution
+# classification of error
+# rob lisa 21st march
 
 if __name__ == "__main__":
 
@@ -468,6 +488,9 @@ if __name__ == "__main__":
         "Example usage: python portfolio abde12_reac.pkl"
 
     df = pd.read_pickle(sys.argv[1])
+    # just to make sure that stuff is sorted
+    df.sort_values(['functional', 'basis', 'unrestricted', 'reaction'], inplace=True)
+
     outer_cv(df)
     #m = Portfolio(df = df, positive_constraint = 1)
     #print(m.optimal_portfolio[m.optimal_portfolio > 1e-2])

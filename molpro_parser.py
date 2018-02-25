@@ -172,8 +172,7 @@ def parse_reactions(reaction_filename, df):
                 df_reaction.time += df.loc[df.molecule == product].time.as_matrix()
 
             # subtract uCCSD reference
-            df_reaction2 = df_reaction.loc[df_reaction.functional != 'uCCSD']
-            df_reaction2 = df_reaction2.assign(energy = lambda x: x.energy-df_reaction.loc[df_reaction.functional == 'uCCSD'].energy.as_matrix()[0])
+            df_reaction['error'] = df_reaction.energy - df_reaction.loc[df_reaction.functional == 'uCCSD'].energy.as_matrix()[0]
 
             # Make sure that reaction energy is negative
             df_tmp = df_reaction.loc[(df_reaction.functional == 'uCCSD') & (df_reaction.energy > 0)]
@@ -182,7 +181,7 @@ def parse_reactions(reaction_filename, df):
                 print(df_tmp)
 
 
-            dfr = dfr.append(df_reaction2, ignore_index = True)
+            dfr = dfr.append(df_reaction[df_reaction.functional != 'uCCSD'], ignore_index = True)
     return dfr
 
 def make_pickles(data_set_name, data_set_path = "../portfolio_datasets/"):
