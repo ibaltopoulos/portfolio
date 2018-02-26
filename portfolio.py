@@ -10,16 +10,24 @@ import random
 import sklearn.covariance
 import sklearn.model_selection
 import sklearn.mixture
+import sklearn.linear_model
 import warnings
 import pomegranate
 import sys
 import matplotlib.pyplot as plt
+import inspect
+import warnings
+import sklearn.exceptions
+from sklearn.exceptions import ConvergenceWarning
 
 #def get_random_matrix(n_samples, n_features):
 #    cov = datasets.make_spd_matrix(n_features)
 #    means = (np.random.random(n_features) - 0.5) * 5
 #    x = np.random.multivariate_normal(means, cov, n_samples)
 #    return cov, means, x
+
+def lineno():
+    return inspect.currentframe().f_back.f_lineno
 
 def multivariate_normal_pdf(x, mu, cov):
     return ss.multivariate_normal.logpdf(x, mu, cov, allow_singular=True)
@@ -218,6 +226,8 @@ class Estimators(object):
     def _get_mean(self):
         if self.mean_estimator == 'mle':
             return self.get_mle_mean()
+        elif is_none(self.mean_estimator):
+            return None
         else:
             quit("Error: Unknown strategy %s for getting means" % self.mean_estimator)
 
@@ -230,7 +240,9 @@ class Estimators(object):
             return self.get_gl_covariance_cv()
         elif self.cov_estimator == 'lw':
             return self.get_lw_covariance()
-        elif isinstance(self.cov, str):
+        elif is_none(self.cov_estimator):
+            return None
+        else:
             quit("Error: Unknown strategy %s for getting covariance" % self.cov)
 
     def naive_bayes_mean(self):
@@ -269,8 +281,6 @@ class Portfolio(Estimators):
         # matrix is not singular
         #self.cov += np.identity(self.n_assets)*1e-6
 
-        self.optimal_portfolio = self.get_optimal_portfolio()
-
     def _get_mixture_weights(self, n):
         """
         Fit multivariate normals to the energies under the assumption
@@ -281,6 +291,12 @@ class Portfolio(Estimators):
     def _pandas_parser(self, df):
         if is_none(df):
             return
+        # just to make sure that stuff is sorted
+        # supress warning as this works like intended
+        pd.options.mode.chained_assignment = None
+        df.sort_values(['functional', 'basis', 'unrestricted', 'reaction'])
+        pd.options.mode.chained_assignment = "warn"
+
         unique_reactions = df.reaction.unique()
         unique_basis = df.basis.unique()
         unique_functionals = df.functional.unique()
@@ -291,9 +307,11 @@ class Portfolio(Estimators):
 
         energies = []
         times = []
+        errors = []
         for idx, reac in enumerate(unique_reactions):
             sub_df = df.loc[df.reaction == reac]
             energies.append(sub_df.energy.tolist())
+            errors.append(sub_df.error.tolist())
             times.append(sub_df.time.tolist())
             if idx == 0:
                 func = [func_to_id[x] for x in sub_df.functional.tolist()]
@@ -301,19 +319,25 @@ class Portfolio(Estimators):
                 unres = [unres_to_id[x] for x in sub_df.unrestricted.tolist()]
                 classes = np.asarray([func, bas, unres], dtype=int)
 
-        self.x = np.asarray(energies)
+        self.x = np.asarray(errors)
+        self.raw = np.asarray(energies)
         self.cost = np.asarray(times)
         self.classes = classes
 
-
-    def get_optimal_portfolio(self):
+    def fit(self):
         if self.portfolio == 'zero_mean_min_variance':
-            return self.zero_mean_min_variance()
+            self.weights = self.zero_mean_min_variance()
+            self.intercept = 0
         elif self.portfolio == 'min_variance_upper_mean_bound':
-            return self.min_variance_upper_mean_bound()
+            self.weights = self.min_variance_upper_mean_bound()
+            self.intercept = 0
         elif self.portfolio == 'min_squared_mean':
-            return self.min_squared_mean()
-        quit("Error: Unknown portfolio method %s" % self.portfolio)
+            self.weights= self.min_squared_mean()
+            self.intercept = 0
+        elif self.portfolio == 'elastic_net':
+            self.weights, self.intercept = self.elastic_net()
+        else:
+            quit("Error: Unknown portfolio method %s" % self.portfolio)
 
     def zero_mean_min_variance(self):
         """
@@ -422,7 +446,30 @@ class Portfolio(Estimators):
         sol = cvxopt.solvers.qp(P, q, G, h, A, b, verbose=False)
         return np.asarray(sol['x']).ravel()
 
-def outer_cv(df):
+    def elastic_net(self):
+        """
+        Minimize the squared error of a linear model with l1 and l2 regularization.
+        The regularization parameters are determined by 5 fold cross validation.
+        """
+
+        warnings.filterwarnings("ignore", category=ConvergenceWarning)
+        model = sklearn.linear_model.ElasticNetCV(
+                #l1_ratio = [0.01, .2, .5, .7, .9, .95, .99, 1], eps = 1e-9, 
+                #n_alphas = 100, max_iter = 100, cv = 5, positive = self.positive_constraint)
+                l1_ratio = 0,
+                alphas = 10**np.arange(-10,10,0.1))
+
+
+        model.fit(self.raw, (self.raw - self.x)[:,0])
+        print(model.coef_.min())
+        print(model.coef_.max())
+        print(model.mse_path_.mean(1).min())
+
+        return model.coef_, model.intercept_
+
+
+
+def outer_cv(df, kwargs):
 
     reactions = df.reaction.unique()
 
@@ -431,16 +478,21 @@ def outer_cv(df):
     for (train_idx, test_idx) in sklearn.model_selection.LeaveOneOut().split(reactions):
         reac = reactions[test_idx[0]]
         energies = df.loc[df.reaction == reac].energy.as_matrix()
+        target = (energies - df.loc[df.reaction == reac].error.as_matrix())[0]
         timings = df.loc[df.reaction == reac].time.as_matrix()
 
         train_df = df.loc[df.reaction != reac]
 
-        #m = Portfolio(df = train_df, positive_constraint = 1, portfolio = 'zero_mean_min_variance', upper_mean_bound = 0)
-        #m = Portfolio(df = train_df, positive_constraint = 1, portfolio = 'min_variance_upper_mean_bound', upper_mean_bound = 1)
-        m = Portfolio(df = train_df, positive_constraint = 1, portfolio = 'min_squared_mean', upper_mean_bound = 0)
-        cut = 1e-6
-        portfolio_energy = np.sum(np.clip(m.optimal_portfolio,cut, 1) / sum(np.clip(m.optimal_portfolio,cut, 1)) * energies)
-        portfolio_energies.append(portfolio_energy)
+        m = Portfolio(df = train_df, **kwargs)
+        m.fit()
+        #cut = 1e-6
+        #portfolio_energy = np.sum(np.clip(m.optimal_portfolio,cut, 1) / sum(np.clip(m.optimal_portfolio,cut, 1)) * energies)
+        #portfolio_energies.append(portfolio_energy)
+        print(target)
+        print(m.weights.shape)
+        print(energies.shape)
+        quit(sum(m.weights * energies + m.intercept) - target)
+        portfolio_energies.append(sum(m.weights * energies + m.intercept) - target)
         likelihoods.append(multivariate_normal_pdf(energies, m.mean, m.cov))
 
     portfolio_energies = np.asarray(portfolio_energies)
@@ -450,37 +502,51 @@ def outer_cv(df):
     #plt.scatter(portfolio_energies, likelihoods)
     #plt.show()
 
-    #fig, ax = plt.subplots()
     print(abs(portfolio_energies).max(), np.median(abs(portfolio_energies)), np.mean(abs(portfolio_energies)))
-    #print(abs(pbe0).max(), np.median(abs(pbe0)), np.mean(abs(pbe0)))
-    #ax.scatter(abs(portfolio_energies), abs(pbe0))
+    fig, ax = plt.subplots()
 
-    #lims = [
-    #np.min([ax.get_xlim(), ax.get_ylim()]),  # min of both axes
-    #np.max([ax.get_xlim(), ax.get_ylim()]),  # max of both axes
-    #]
-    #
-    ## now plot both limits against eachother
-    #ax.plot(lims, lims, 'k-', alpha=0.75, zorder=0)
-    #ax.set_aspect('equal')
-    #ax.set_xlim(lims)
-    #ax.set_ylim(lims)
+    ax.scatter(abs(portfolio_energies), abs(pbe0))
+    lims = [
+    np.min([ax.get_xlim(), ax.get_ylim()]),  # min of both axes
+    np.max([ax.get_xlim(), ax.get_ylim()]),  # max of both axes
+    ]
+    
+    # now plot both limits against eachother
+    ax.plot(lims, lims, 'k-', alpha=0.75, zorder=0)
+    ax.set_aspect('equal')
+    ax.set_xlim(lims)
+    ax.set_ylim(lims)
 
-    #plt.show()
+    plt.show()
+
+def evaluate_all_methods(df):
+
+    outer_cv(df, {"positive_constraint": 0, "portfolio": "elastic_net"})
+
+
 
 
 
 ### TODO
+# scaling
+# timings
+# weights > -1 / -2 etc.
 # bayes (pomegranate / pymc)
 # mixtures
-# scaling
-# outer cv
-# timings
 # elastic net
-# weights > -1 / -2 etc.
 # t-distribution
 # classification of error
 # rob lisa 21st march
+# support both elastic net and portfolio methods
+# cv distribution / means, cov etc.
+# predict call
+
+# Tasks
+# compare methods using all data points (linear, normal, t, mixture)/(binary scaling, linear scaling)
+# select best
+# Repeat for maximum different basis sets
+# Time vs accuracy
+# Classification of error from probability
 
 if __name__ == "__main__":
 
@@ -488,11 +554,6 @@ if __name__ == "__main__":
         "Example usage: python portfolio abde12_reac.pkl"
 
     df = pd.read_pickle(sys.argv[1])
-    # just to make sure that stuff is sorted
-    df.sort_values(['functional', 'basis', 'unrestricted', 'reaction'], inplace=True)
 
-    outer_cv(df)
-    #m = Portfolio(df = df, positive_constraint = 1)
-    #print(m.optimal_portfolio[m.optimal_portfolio > 1e-2])
-
+    evaluate_all_methods(df)
 
