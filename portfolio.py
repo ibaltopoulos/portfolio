@@ -255,7 +255,7 @@ class Portfolio(Estimators):
     """
 
     def __init__(self, df = None, x = None, cost = None, classes = None, mean_estimator = 'mle',
-            cov_estimator = 'mle', portfolio = 'zero_mean_min_variance',
+            cov_estimator = 'mle', portfolio = 'zero_mean_min_variance', l2 = 0.0,
             positive_constraint = False, upper_mean_bound = 1, n_mixtures = 1, scaling = False):
 
         self.x = x
@@ -264,6 +264,7 @@ class Portfolio(Estimators):
         self.positive_constraint = positive_constraint
         self.portfolio = portfolio
         self.upper_mean_bound = upper_mean_bound
+        self.l2 = l2
 
         # preprocess if a pandas dataframe was given
         self._pandas_parser(df)
@@ -286,7 +287,6 @@ class Portfolio(Estimators):
         Fit multivariate normals to the energies under the assumption
         that the data is described by n mixtures.
         """
-
 
     def _pandas_parser(self, df):
         if is_none(df):
@@ -336,6 +336,12 @@ class Portfolio(Estimators):
             self.intercept = 0
         elif self.portfolio == 'elastic_net':
             self.weights, self.intercept = self.elastic_net()
+        elif self.portfolio == 'constrained_elastic_net':
+            self.weights = self.constrained_elastic_net()
+            self.intercept = 0
+        elif self.portfolio == 'constrained_elastic_net_cv':
+            self.weights = self.constrained_elastic_net_cv()
+            self.intercept = 0
         else:
             quit("Error: Unknown portfolio method %s" % self.portfolio)
 
@@ -464,9 +470,79 @@ class Portfolio(Estimators):
 
 
         model.fit(self.raw, (self.raw - self.x)[:,0])
-        print(model.l1_ratio_)
 
         return model.coef_, model.intercept_
+
+    def constrained_elastic_net(self, x = None, l2 = None, init_weights = None):
+        """
+        Minimize x'(L+EE')x, where L is a constant times the identity matrix (l2 regularization),
+        E is the error of the training set and x is the portfolio weights.
+        The constraints sum(x) = 1 is used. Optionally the constraint x >= 0 is used if self.positive_constraint == False.
+        """
+
+        if is_none(x):
+            x = self.x
+        if is_none(l2):
+            l2 = self.l2
+
+        ### objectives ###
+        P = cvxopt.matrix(x.T.dot(x) + l2*np.identity(self.n_assets))
+        q = cvxopt.matrix(0.0, (self.n_assets,1))
+
+        #### constraints ###
+
+        # optional constraint x >= 0 if positive == False
+        if self.positive_constraint:
+            G = cvxopt.matrix(-np.identity(self.n_assets))
+            h = cvxopt.matrix(0.0, (self.n_assets, 1))
+        else:
+            # This doesn't really work and no idea why, but it isn't used
+            G = cvxopt.matrix(0.0, (1, self.n_assets))
+            h = cvxopt.matrix(0.0)
+
+
+        # sum(x) = 1
+        A = cvxopt.matrix(1.0, (1, self.n_assets))
+        b = cvxopt.matrix(1.0)
+
+        # suppress output
+        cvxopt.solvers.options['show_progress'] = False
+
+        ### solve ###
+        if is_none(init_weights):
+            sol = cvxopt.solvers.qp(P, q, G, h, A, b)
+        else:
+            # warmstart
+            sol = cvxopt.solvers.qp(P, q, G, h, A, b, initvals = {'x':cvxopt.matrix(init_weights[:,None])})
+        return np.asarray(sol['x']).ravel()
+
+    def constrained_elastic_net_cv(self):
+        """
+        Determine the optimal l2 value for constrained elastic net
+        by 5x5 repeated k-fold cross validation
+        """
+
+        cv_generator = sklearn.model_selection.RepeatedKFold(n_splits = 5, n_repeats = 3)
+
+        l2 = 10**np.arange(-6, 3, 1.0)
+
+        rme = np.zeros(l2.size)
+
+        weights = None
+        all_weights = []
+        for (train, test) in cv_generator.split(range(self.n_samples)):
+            for i, v in enumerate(l2):
+                if is_none(weights):
+                    weights = self.constrained_elastic_net(x = self.x[train], l2 = v)
+                else:
+                    weights = self.constrained_elastic_net(x = self.x[train], l2 = v, init_weights = weights)
+                all_weights.append(weights[:])
+                rme[i] += sum(np.sum(weights * self.x[test], axis=1)**2)
+
+        best_idx = np.argmin(rme)
+        return self.constrained_elastic_net(l2 = l2[best_idx], init_weights = all_weights[best_idx])
+
+
 
 
 
@@ -476,7 +552,10 @@ def outer_cv(df, kwargs):
 
     portfolio_energies = []
     likelihoods = []
+    c = 0
     for (train_idx, test_idx) in sklearn.model_selection.LeaveOneOut().split(reactions):
+        print(c)
+        c += 1
         reac = reactions[test_idx[0]]
         energies = df.loc[df.reaction == reac].energy.as_matrix()
         target = (energies - df.loc[df.reaction == reac].error.as_matrix())[0]
@@ -504,7 +583,7 @@ def outer_cv(df, kwargs):
 
 
 
-    print("\n",abs(portfolio_energies).max(), np.median(abs(portfolio_energies)), np.mean(abs(portfolio_energies)))
+    print(abs(portfolio_energies).max(), np.median(abs(portfolio_energies)), np.mean(abs(portfolio_energies)))
     #fig, ax = plt.subplots()
 
     #ax.scatter(abs(portfolio_energies), abs(ref))
@@ -523,8 +602,10 @@ def outer_cv(df, kwargs):
 
 def evaluate_all_methods(df):
 
-    outer_cv(df, {"positive_constraint": 0, "portfolio": "elastic_net"})
-    outer_cv(df, {"positive_constraint": 1, "portfolio": "elastic_net"})
+    #outer_cv(df, {"positive_constraint": 0, "portfolio": "elastic_net"})
+    #outer_cv(df, {"positive_constraint": 1, "portfolio": "elastic_net"})
+    outer_cv(df, {"positive_constraint": 1, "portfolio": "constrained_elastic_net"})
+    outer_cv(df, {"positive_constraint": 1, "portfolio": "constrained_elastic_net_cv"})
 
 
 
@@ -539,7 +620,6 @@ def evaluate_all_methods(df):
 # elastic net
 # t-distribution
 # classification of error
-# rob lisa 21st march
 # support both elastic net and portfolio methods
 # cv distribution / means, cov etc.
 # predict call
