@@ -453,17 +453,18 @@ class Portfolio(Estimators):
         """
 
         warnings.filterwarnings("ignore", category=ConvergenceWarning)
+        cv_generator = sklearn.model_selection.RepeatedKFold(n_splits = 5, n_repeats = 5)
         model = sklearn.linear_model.ElasticNetCV(
-                #l1_ratio = [0.01, .2, .5, .7, .9, .95, .99, 1], eps = 1e-9, 
-                #n_alphas = 100, max_iter = 100, cv = 5, positive = self.positive_constraint)
-                l1_ratio = 0,
-                alphas = 10**np.arange(-10,10,0.1))
+                cv = cv_generator, 
+                l1_ratio = [0.0001, 0.001, 0.01, 0.1, .2, 0.5, 0.8, 0.9, 0.99, 1.0], eps = 1e-3, 
+                n_alphas = 20, max_iter = 20, positive = self.positive_constraint,
+                #l1_ratio = 0,
+                #alphas = 10**np.arange(-10,10,0.5),
+                n_jobs=1)
 
 
         model.fit(self.raw, (self.raw - self.x)[:,0])
-        print(model.coef_.min())
-        print(model.coef_.max())
-        print(model.mse_path_.mean(1).min())
+        print(model.l1_ratio_)
 
         return model.coef_, model.intercept_
 
@@ -488,40 +489,42 @@ def outer_cv(df, kwargs):
         #cut = 1e-6
         #portfolio_energy = np.sum(np.clip(m.optimal_portfolio,cut, 1) / sum(np.clip(m.optimal_portfolio,cut, 1)) * energies)
         #portfolio_energies.append(portfolio_energy)
-        print(target)
-        print(m.weights.shape)
-        print(energies.shape)
-        quit(sum(m.weights * energies + m.intercept) - target)
-        portfolio_energies.append(sum(m.weights * energies + m.intercept) - target)
+        portfolio_energies.append(sum(m.weights * energies) + m.intercept - target)
         likelihoods.append(multivariate_normal_pdf(energies, m.mean, m.cov))
 
     portfolio_energies = np.asarray(portfolio_energies)
 
-    pbe0 = df.loc[(df.functional == 'M06-2X') & (df.basis == 'qzvp') & (df.unrestricted == True)].energy.as_matrix()
+    ref_df = df.loc[(df.functional == 'M06-2X') & (df.basis == 'qzvp') & (df.unrestricted == True)][["reaction","error"]]
+    #print(ref_df)
+    ref = ref_df.error.as_matrix()
 
     #plt.scatter(portfolio_energies, likelihoods)
     #plt.show()
 
-    print(abs(portfolio_energies).max(), np.median(abs(portfolio_energies)), np.mean(abs(portfolio_energies)))
-    fig, ax = plt.subplots()
 
-    ax.scatter(abs(portfolio_energies), abs(pbe0))
-    lims = [
-    np.min([ax.get_xlim(), ax.get_ylim()]),  # min of both axes
-    np.max([ax.get_xlim(), ax.get_ylim()]),  # max of both axes
-    ]
-    
-    # now plot both limits against eachother
-    ax.plot(lims, lims, 'k-', alpha=0.75, zorder=0)
-    ax.set_aspect('equal')
-    ax.set_xlim(lims)
-    ax.set_ylim(lims)
 
-    plt.show()
+
+    print("\n",abs(portfolio_energies).max(), np.median(abs(portfolio_energies)), np.mean(abs(portfolio_energies)))
+    #fig, ax = plt.subplots()
+
+    #ax.scatter(abs(portfolio_energies), abs(ref))
+    #lims = [
+    #        np.min([ax.get_xlim(), ax.get_ylim()]),  # min of both axes
+    #        np.max([ax.get_xlim(), ax.get_ylim()]),  # max of both axes
+    #        ]
+    #
+    ## now plot both limits against eachother
+    #ax.plot(lims, lims, 'k-', alpha=0.75, zorder=0)
+    #ax.set_aspect('equal')
+    #ax.set_xlim(lims)
+    #ax.set_ylim(lims)
+
+    #plt.show()
 
 def evaluate_all_methods(df):
 
     outer_cv(df, {"positive_constraint": 0, "portfolio": "elastic_net"})
+    outer_cv(df, {"positive_constraint": 1, "portfolio": "elastic_net"})
 
 
 
