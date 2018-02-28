@@ -49,6 +49,8 @@ def kl_divergence(mu1, cov1, mu2, cov2, n = int(1e6)):
 def is_none(x):
     return isinstance(x, type(None))
 
+
+
 class NaiveBayesRegression(object):
     """
     Naive bayes model, where the number of hidden nodes acts as regularization for the data.
@@ -542,8 +544,25 @@ class Portfolio(Estimators):
         best_idx = np.argmin(rme)
         return self.constrained_elastic_net(l2 = l2[best_idx], init_weights = all_weights[best_idx])
 
+    def get_best(self):
+        uniq_func = df.functional.unique()
+        uniq_basis = df.basis.unique()
+        uniq_reac = df.reaction.unique()
+        mae = np.empty((uniq_func.size, uniq_basis.size, 2, uniq_reac.size))
+        for i, func in enumerate(df.functional.unique()):
+            for j, basis in enumerate(df.basis.unique()):
+                for k, unres in enumerate([True, False]):
+                    mae[i,j,k] = abs(df.loc[(df.functional == func) & (df.basis == basis) & (df.unrestricted == unres)].error.as_matrix())
+        mae_ravel = mae.reshape(-1, mae.shape[-1]).T
+        naive = []
+        for i in range(mae.shape[-1]):
+            x = np.concatenate([mae_ravel[:i], mae_ravel[i+1:]])
+            #best = np.argmin(np.sum(x, axis=0)) # mae
+            best = np.argmin(np.sum(x**2, axis=0)) # rmsd
+            #best = np.argmin(np.max(x, axis=0)) # max
+            naive.append(mae_ravel[i,best])
 
-
+        print(np.max(naive), np.mean(naive))
 
 
 def outer_cv(df, kwargs):
@@ -567,7 +586,6 @@ def outer_cv(df, kwargs):
         m.fit()
         #cut = 1e-6
         #portfolio_energy = np.sum(np.clip(m.optimal_portfolio,cut, 1) / sum(np.clip(m.optimal_portfolio,cut, 1)) * energies)
-        #portfolio_energies.append(portfolio_energy)
         portfolio_energies.append(sum(m.weights * energies) + m.intercept - target)
         likelihoods.append(multivariate_normal_pdf(energies, m.mean, m.cov))
 
@@ -638,5 +656,9 @@ if __name__ == "__main__":
 
     df = pd.read_pickle(sys.argv[1])
 
-    evaluate_all_methods(df)
+
+
+
+
+    #evaluate_all_methods(df)
 
