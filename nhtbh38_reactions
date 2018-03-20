@@ -1,18 +1,26 @@
-# Energy is released in all reactions
-# First reactants->products
-H N2O;OH N2
-H CH3F;HF CH3
-H F2;HF F
-CH3 FCl;CH3F Cl
-F- CH3Cl;CH3F Cl-
-FCH3Clcomp1;FCH3Clcomp2
-OH- CH3F; CH3OH F-
-HOCH3Fcomp2;HOCH3Fcomp1
-HN2;H N2
-H CO;HCO
+# 1,1: H dissociation
+# 2,1: neutral oxygen transfer
+# 2,2: neutral flouride transfer
+# 2,3: charged methyle transfer
+# The direction of the reactions are such that there will
+# be more species in the product.
+# If the number of species doesn't change, the direction
+# is such that energy is released in the reaction
+H N2O, OH N2, 2, 1
+H CH3F,HF CH3, 2, 2
+H F2, HF F, 2, 2
+CH3 FCl, CH3F Cl, 2, 2
+F- CH3Cl, CH3F Cl-, 2, 3
+OH- CH3F, CH3OH F-, 2, 3
+HN2, H N2, 1, 1
+HCO, H CO, 1, 1
 H C2H4;CH3CH2
 CH3 C2H4;CH3CH2CH2
+
 HNC;HCN
+
+HOCH3Fcomp2;HOCH3Fcomp1
+FCH3Clcomp1;FCH3Clcomp2
 # Then reactants->TS
 TS1;H N2O
 TS2;H HF
