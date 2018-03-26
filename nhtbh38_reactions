@@ -1,9 +1,23 @@
 # 1,1: H dissociation
-# 2,1: neutral oxygen transfer
-# 2,2: neutral flouride transfer
+# 2,1: radical oxygen transfer
+# 2,2: radical flouride transfer
 # 2,3: charged methyle transfer
+# 3,1: H radical adsorption
+# 3,2: CH3 radical adsorption
+# 4,1: Intra-molecular reorganization
+# 5,1: charged methyle transfer complex (pre-reaction complex to post-reaction complex)
+# 6,1: O radical transfer barrier height
+# 6,2: F radical transfer barrier height
+# 6,3: Cl radical transfer barrier height
+# 6,4: charged methyle transfer barrier height
+# 7,1: charged methyle transfer barrier height complex (complex to TS)
+# 8,1: H radical adsorption barrier height
+# 8,2: CH3 radical adsorption barrier height
+# 9,1: Intra-molecular reorganization barrier height
+# 10,1: H radical dissociation barrier height
+# 10,2: CH3 radical dissociation barrier height
 # The direction of the reactions are such that there will
-# be more species in the product.
+# be more species in the reactant.
 # If the number of species doesn't change, the direction
 # is such that energy is released in the reaction
 H N2O, OH N2, 2, 1
@@ -12,46 +26,42 @@ H F2, HF F, 2, 2
 CH3 FCl, CH3F Cl, 2, 2
 F- CH3Cl, CH3F Cl-, 2, 3
 OH- CH3F, CH3OH F-, 2, 3
-HN2, H N2, 1, 1
-HCO, H CO, 1, 1
-H C2H4;CH3CH2
-CH3 C2H4;CH3CH2CH2
-
-HNC;HCN
-
-HOCH3Fcomp2;HOCH3Fcomp1
-FCH3Clcomp1;FCH3Clcomp2
-# Then reactants->TS
-TS1;H N2O
-TS2;H HF
-TS3;H HCl
-TS4;H CH3F
-TS5;H F2
-TS6;CH3 FCl
-F- CH3F;TS7
-TS7;FCH3Fcomp
-TS9;Cl- CH3Cl
-TS9;ClCH3Clcomp
-F- CH3Cl; TS11
-TS11;FCH3Clcomp1
-OH- CH3F;TS13
-TS13;HOCH3Fcomp1
-TS15;H N2
-TS16;H CO
-TS17;H C2H4
-TS18;CH3 C2H4
-TS19;HCN
-# Then product->TS
-TS1;OH N2
-TS4;HF CH3
-TS5;HF F
-TS6;CH3F Cl
-TS11;Cl- CH3F
-TS11;FCH3Clcomp2
-TS13;F- CH3OH
-TS13;HOCH3Fcomp2
-TS15;HN2
-TS16;HCO
-TS17;CH3CH2
-TS18;CH3CH2CH2
-TS19;HNC
+H N2, HN2, 3, 1
+H CO, HCO, 3, 1
+H C2H4, CH3CH2, 3, 1
+CH3 C2H4, CH3CH2CH2, 3, 2
+HNC, HCN, 4, 1
+HOCH3Fcomp2, HOCH3Fcomp1, 5, 1
+FCH3Clcomp1, FCH3Clcomp2, 5, 1
+H N2O, TS1, 6, 1
+H HF, TS2, 6, 2
+H HCl, TS3, 6, 3
+H CH3F, TS4, 6, 2
+H F2, TS5, 6, 2
+CH3 FCl, TS6, 6, 2
+F- CH3F, TS7, 6, 4
+FCH3Fcomp, TS7, 7, 1
+Cl- CH3Cl, TS9, 6, 4
+ClCH3Clcomp, TS9, 7, 1
+F- CH3Cl, TS11, 6, 4
+FCH3Clcomp1, TS11, 7, 1
+OH- CH3F, TS13, 6, 4
+HOCH3Fcomp1, TS13, 7, 1
+H N2, TS15, 8, 1
+H CO, TS16, 8, 1
+H C2H4, TS17, 8, 1
+CH3 C2H4, TS18, 8, 2
+HCN, TS19, 9, 1
+OH N2, TS1, 6, 1
+HF CH3, TS4, 6, 2
+HF F, TS5, 6, 2
+CH3F Cl, TS6, 6, 2
+Cl- CH3F, TS11, 6, 4
+FCH3Clcomp2, TS11, 7, 1
+F- CH3OH, TS13, 6, 4
+HOCH3Fcomp2, TS13, 7, 1
+HN2, TS15, 10, 1
+HCO, TS16, 10, 1
+CH3CH2, TS17, 10, 1
+CH3CH2CH2, TS18, 10, 2
+HNC, TS19, 9, 1
