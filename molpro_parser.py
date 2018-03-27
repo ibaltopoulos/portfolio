@@ -223,14 +223,14 @@ def parse_reactions(reaction_filename, df):
         dfr = dfr.append(df_reaction[df_reaction.functional != 'uCCSD'], ignore_index = True)
     return dfr
 
-def make_pickles(data_set_name, data_set_path = "../portfolio_datasets/"):
+def make_pickles(data_set_name, data_set_path = "../portfolio_datasets/", pickle_path = "pickles/"):
     """
     Create the pandas dataframe pickles if the don't already exist.
     """
 
     path = data_set_path + "/" + data_set_name
-    mol_df_name = data_set_name + "_mol.pkl"
-    reac_df_name = data_set_name + "_reac.pkl"
+    mol_df_name = pickle_path + data_set_name + "_mol.pkl"
+    reac_df_name = pickle_path + data_set_name + "_reac.pkl"
 
     # Try to read the dataset pickle, else make it.
     try:
@@ -288,17 +288,41 @@ def set_median_timings(df):
                 time = np.median(hybrid_meta_df.time.as_matrix())
                 df.at[hybrid_meta_df.index, "time"] = time
 
+def set_expensive_timings(df):
+    """
+    Get the most expensive reaction and set the cost
+    of all the reactions to match this.
+    """
+
+    cost = df.loc[(df.functional == 'M06-2X') & (df.basis == 'qzvp') & (df.unrestricted == True)].time.as_matrix()
+
+    unique_functionals = df.functional.unique()
+    unique_basis = df.basis.unique()
+
+    for func in unique_functionals:
+        for un in True, False:
+            for bas in unique_basis:
+                sub_df = df.loc[(df.functional == func) & (df.basis == bas) & (df.unrestricted == un)]
+                df.at[sub_df.index, "time"] = cost
+
+    return df
+
+
 def main():
     """
     Create all the reaction pickles
     """
     abde12_reac = make_pickles("abde12")
-    print(abde12_reac.head())
-    #nhtbh38_reac = make_pickles("nhtbh38")
+    nhtbh38_reac = make_pickles("nhtbh38")
 
     # combine
-    #df = abde12_reac.append(nhtbh38_reac, ignore_index = True)
-    #df.to_pickle("combined_reac.pkl")
+    df = abde12_reac.append(nhtbh38_reac, ignore_index = True)
+    df.to_pickle("pickles/combined_reac.pkl")
+    print(df.head())
+
+    # Set cost to match the most expensive reaction
+    df = set_expensive_timings(df)
+    df.to_pickle("pickles/combined_high_cost.pkl")
 
 
 if __name__ == "__main__":
