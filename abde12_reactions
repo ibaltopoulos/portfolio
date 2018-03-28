@@ -1,15 +1,20 @@
-# energy is released in the reactions
-CH3O CH3;C2H6O
-CH3 CH3;Et-H
-Et H;Et-H
-CH3O iPr;C4H10O
-tBu H;C4H10
-CH3 iPr;C4H10
-CH3 Et;Et-CH3
-Et CH3O;EtOCH3
-Et OH;EtOH
-CH3 tBu;tBu-CH3
-tBu H;tBu-H
-iPr CH3;tBu-H
-tBu CH3O;tBu-OCH3
-tBu OH;tBu-OH
+# 1,1: H dissociation
+# 1,2: CH3 dissociation
+# 1,3: CH3O dissociation
+# 1,4: OH dissociation
+# Below reaction listed twice since it's both CH3 and CH3O dissociation
+C2H6O, CH3O CH3, 1, 2
+C2H6O, CH3O CH3, 1, 3
+Et-H, CH3 CH3, 1, 2
+Et-H, Et H, 1, 1
+C4H10O, CH3O iPr, 1, 3
+C4H10, tBu H, 1, 1
+C4H10, CH3 iPr, 1, 2
+Et-CH3, CH3 Et, 1, 2
+EtOCH3, Et CH3O, 1, 3
+EtOH, Et OH, 1, 4
+tBu-CH3, CH3 tBu, 1, 2
+tBu-H, tBu H, 1, 1
+tBu-H, iPr CH3, 1, 2
+tBu-OCH3, tBu CH3O, 1, 3
+tBu-OH, tBu OH, 1, 4

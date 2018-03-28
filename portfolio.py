@@ -1,104 +1,92 @@
 import numpy as np
-#from sklearn import datasets
 import scipy.stats as ss
-#from scipy.optimize import minimize
-#import sklearn
 import cvxopt
-#import scipy.cluster.hierarchy as sch
 import pandas as pd
-import random
-import sklearn.covariance
+#import sklearn.covariance
 import sklearn.model_selection
 import sklearn.mixture
 import sklearn.linear_model
 import warnings
-#import pomegranate
 import sys
 import matplotlib.pyplot as plt
-import inspect
 import warnings
-import sklearn.exceptions
 from sklearn.exceptions import ConvergenceWarning
 
-#def get_random_matrix(n_samples, n_features):
-#    cov = datasets.make_spd_matrix(n_features)
-#    means = (np.random.random(n_features) - 0.5) * 5
-#    x = np.random.multivariate_normal(means, cov, n_samples)
-#    return cov, means, x
 
-def multivariate_normal_logpdf(x, mu, cov):
-    return ss.multivariate_normal.logpdf(x, mu, cov, allow_singular=True)
+#def multivariate_normal_logpdf(x, mu, cov):
+#    """
+#    Return the loglikelihood of x given mu and cov.
+#    """
+#    return ss.multivariate_normal.logpdf(x, mu, cov, allow_singular=True)
 
-def shannon_entropy(x, mu, cov):
-    p = multivariate_normal_pdf(x, mu, cov)
-    return sum(p*np.log(p))
+#def shannon_entropy(x, mu, cov):
+#    p = multivariate_normal_pdf(x, mu, cov)
+#    return sum(p*np.log(p))
 
-def kl_divergence(mu1, cov1, mu2, cov2, n = int(1e6)):
-    """
-    p1 is true distribution
-    """
-    x = np.random.multivariate_normal(mu1, cov1, n)
-    p1 = multivariate_normal_pdf(x, mu1, cov1)
-    p2 = multivariate_normal_pdf(x, mu2, cov2)
-
-    return ss.entropy(p1, p2)
+#def kl_divergence(mu1, cov1, mu2, cov2, n = int(1e6)):
+#    """
+#    Return the Kullback-Leiber divergence between two multivariate
+#    normal distributions. This is a measure of similarity.
+#    p1 is true distribution
+#    """
+#    x = np.random.multivariate_normal(mu1, cov1, n)
+#    p1 = multivariate_normal_pdf(x, mu1, cov1)
+#    p2 = multivariate_normal_pdf(x, mu2, cov2)
+#
+#    return ss.entropy(p1, p2)
 
 def is_none(x):
+    """
+    Helper function since x == None doesn't work well on arrays. Returns True if x is None.
+    """
     return isinstance(x, type(None))
 
-
-
-class NaiveBayesRegression(object):
-    """
-    Naive bayes model, where the number of hidden nodes acts as regularization for the data.
-
-    """
-
-    def __init__(self):
-        pass
-
-    # TODO fix
-    def fit(self, x, distributions, n_nodes = 3):
-        """
-        Fit the hidden bayes model.
-        x: array of size (n_samples, n_features)
-        distributions: array of size (n_features, ) that indicates which distribution the 
-            features follows. Can be any singlevariate distribution from pomegranate
-
-        """
-
-        init_dist = []
-        for i, dist in enumerate(distributions):
-            if isinstance(dist, DiscreteDistribution):
-                pass
-
-
-        product_distribution = pomegranate.distributions.IndependentComponentsDistribution()
-
-        self.model = pomegranate.GeneralMixtureModel.from_samples(distributions, n_components = n_nodes, X = x)
+#class NaiveBayesRegression(object):
+#    """
+#    Naive bayes model, where the number of hidden nodes acts as regularization for the data.
+#
+#    """
+#
+#    def __init__(self):
+#        pass
+#
+#    # TODO fix
+#    def fit(self, x, distributions, n_nodes = 3):
+#        """
+#        Fit the hidden bayes model.
+#        x: array of size (n_samples, n_features)
+#        distributions: array of size (n_features, ) that indicates which distribution the 
+#            features follows. Can be any singlevariate distribution from pomegranate
+#
+#        """
+#
+#        init_dist = []
+#        for i, dist in enumerate(distributions):
+#            if isinstance(dist, DiscreteDistribution):
+#                pass
+#
+#
+#        product_distribution = pomegranate.distributions.IndependentComponentsDistribution()
+#
+#        self.model = pomegranate.GeneralMixtureModel.from_samples(distributions, n_components = n_nodes, X = x)
 
 class Estimators(object):
     """
-    Estimators for covariance and/or means
+    Estimators for covariance and/or means.
+    This isn't used for anything other than maximum likelihood estimation
+    of the mean and covariance.
     """
 
     def __init__(self, mean_estimator = 'mle', cov_estimator = 'mle'):
         self.mean_estimator = mean_estimator
         self.cov_estimator = cov_estimator
         self._set_mean_and_cov()
-        #self.corr = self.get_mle_corr()
 
-    def get_diag_covariance(self, x = None, ddof = 1):
-        """
-        """
-        if is_none(x):
-            x = self.x
-
-        return np.diag(x.var(0))
 
     def get_mle_covariance(self, x = None, ddof = 1):
         """
-        Calculates the MLE unbiased covariance matrix of a matrix x
+        Calculates the unbiased maximum likelihood estimation
+        of the covariance matrix of a matrix x
         of shape (n_samples, n_features).
         """
         if is_none(x):
@@ -107,23 +95,29 @@ class Estimators(object):
         # 1e-7 to avoid singularities
         return np.cov(x, ddof = 1, rowvar = False) + 1e-7 * np.identity(x.shape[1])
 
-    def get_oas_covariance(self, x = None):
-        """
-        Calculates the OAS (Oracle Approximating Shrinkage Estimator) covariance.
-        """
-        if is_none(x):
-            x = self.x
+#    def get_diag_covariance(self, x = None, ddof = 1):
+#        if is_none(x):
+#            x = self.x
+#
+#        return np.diag(x.var(0))
 
-        return sklearn.covariance.oas(self.x)[0]
-
-    def get_lw_covariance(self, x = None):
-        """
-        Calculates the shrunk Ledoit-Wolf covariance matrix.
-        """
-        if is_none(x):
-            x = self.x
-
-        return sklearn.covariance.ledoit_wolf(self.x)[0]
+#    def get_oas_covariance(self, x = None):
+#        """
+#        Calculates the OAS (Oracle Approximating Shrinkage Estimator) covariance.
+#        """
+#        if is_none(x):
+#            x = self.x
+#
+#        return sklearn.covariance.oas(self.x)[0]
+#
+#    def get_lw_covariance(self, x = None):
+#        """
+#        Calculates the shrunk Ledoit-Wolf covariance matrix.
+#        """
+#        if is_none(x):
+#            x = self.x
+#
+#        return sklearn.covariance.ledoit_wolf(self.x)[0]
 
 #    def get_gl_covariance(self, x = None, alpha = 0.1):
 #        """
@@ -180,16 +174,21 @@ class Estimators(object):
 #        return self.get_gl_covariance(x = x, alpha = alphas[best_idx])
 
     def get_mle_mean(self, x = None):
+        """
+        Calculates the maximum likelihood estimation
+        of the mean vector of a matrix x
+        of shape (n_samples, n_features).
+        """
         if is_none(x):
             x = self.x
 
         return x.mean(0)
 
-    def get_mle_corr(self, x = None):
-        if is_none(x):
-            x = self.x
-
-        return np.corrcoef(x, rowvar=False)
+#    def get_mle_corr(self, x = None):
+#        if is_none(x):
+#            x = self.x
+#
+#        return np.corrcoef(x, rowvar=False)
 
     def _set_mean_and_cov(self):
         self.mean = self._get_mean()
@@ -206,31 +205,50 @@ class Estimators(object):
     def _get_cov(self):
         if self.cov_estimator == 'mle':
             return self.get_mle_covariance()
-        elif self.cov_estimator == 'diag':
-            return self.get_diag_covariance()
-        elif self.cov_estimator == 'oas':
-            return self.get_oas_covariance()
+        #elif self.cov_estimator == 'diag':
+        #    return self.get_diag_covariance()
+        #elif self.cov_estimator == 'oas':
+        #    return self.get_oas_covariance()
         #elif self.cov_estimator == 'gl':
         #    return self.get_gl_covariance_cv()
-        elif self.cov_estimator == 'lw':
-            return self.get_lw_covariance()
+        #elif self.cov_estimator == 'lw':
+        #    return self.get_lw_covariance()
         elif is_none(self.cov_estimator):
             return None
         else:
             quit("Error: Unknown strategy %s for getting covariance" % self.cov)
 
-    def naive_bayes_mean(self):
-        pass
-
 
 class Portfolio(Estimators):
     """
     For creating portfolios.
+
+    If a pandas dataframe is given, the x, cost and classes are variables are inferred from the dataframe.
+
+    df: pandas dataframe
+    x: error matrix of size (n_samples, n_methods)
+    cost: Cost of the methods of size (n_samples, n_methods)
+    classes: Details of each method, such that one can go back and get details about each method.
+    mean_estimator: Can only use mle for means
+    cov_estimator: Can only use mle for covariance.
+    n_jobs: Number of cpu's to use. -1 uses all cpu's. Only used for method elastic_net.
+    portfolio: Method to use to construct the portfolio. Supported methods are
+        'zero_mean_min_variance', 'zero_mean_min_variance_cv', 'min_variance_upper_mean_bound',
+        'min_variance_upper_mean_bound_cv', 'min_squared_mean', 'min_squared_mean_cv', 'elastic_net',
+        'constrained_elastic_net', constrained_elastic_net_cv', 'single_method'
+    positive_constraint: Constrain the portfolio weights to be positive or zero. Is implied to be True
+        for constrained_elastic_net and constrained_elastic_net_cv
+    upper_mean_bound: Upper limit for the expected error in the
+        min_variance_upper_mean_bound and min_variance_upper_mean_bound_cv methods
+    n_mixtures: Number of mixtures. Is not really used at the moment.
+    n_splits: The number of cross-validation splits
+    n_repeats: The number of repeats in shuffle-split cross-validation
+    metric: Score metric to use for choosing a single method.
     """
 
     def __init__(self, df = None, x = None, cost = None, classes = None, mean_estimator = 'mle',
-            cov_estimator = 'mle', portfolio = 'zero_mean_min_variance', l2 = 0.0,
-            positive_constraint = False, upper_mean_bound = 1, n_mixtures = 1, scaling = False,
+            cov_estimator = 'mle', portfolio = 'zero_mean_min_variance', n_jobs = -1, 
+            positive_constraint = False, upper_mean_bound = 1, n_mixtures = 1,# scaling = False,
             n_splits = 3, n_repeats = 1, metric = 'mae'):
 
         self.x = x
@@ -239,12 +257,12 @@ class Portfolio(Estimators):
         self.positive_constraint = positive_constraint
         self.portfolio = portfolio
         self.upper_mean_bound = upper_mean_bound
-        self.l2 = l2
         self.metric = metric
         self.cv_generator = sklearn.model_selection.RepeatedKFold(n_splits = n_splits, n_repeats = n_repeats)
         self.n_splits = n_splits
         self.n_repeats = n_repeats
-        self.scaling = scaling
+        self.n_jobs = n_jobs
+#        self.scaling = scaling
 
         # preprocess if a pandas dataframe was given
         self._pandas_parser(df)
@@ -255,32 +273,35 @@ class Portfolio(Estimators):
 
         self.n_samples = self.x.shape[0]
         self.n_assets = self.x.shape[1]
-        self._scale_data()
+#        self._scale_data()
 
         super(Portfolio, self).__init__(mean_estimator = mean_estimator, 
                 cov_estimator = cov_estimator)
 
 
-    def _scale_data(self):
-        """
-        Scale everything by a constant to fit the first value
-        """
-
-        if self.scaling:
-            target = self.x[0]
-            self.slopes = np.sum(self.x * target, axis=1) / np.sum(self.x**2, axis=1)
-            #idx = np.argsort(slopes)[len(slopes)//2]
-            #target = self.x[idx]
-            #self.slopes = np.sum(self.x * target, axis=1) / np.sum(self.x**2, axis=1)
-            #quit(self.slopes)
-            #self.slopes = np.sign(slopes)
-            #self.slopes = np.ones(slopes.size)
-            #print(np.sum(abs(self.slopes[:,None]*self.x - target)))
-            self.x = self.slopes[:,None] * self.x
-        else:
-            self.slopes = np.ones(self.n_samples)
+#    def _scale_data(self):
+#        """
+#        Scale everything by a constant to fit the first value
+#        """
+#
+#        if self.scaling:
+#            target = self.x[0]
+#            self.slopes = np.sum(self.x * target, axis=1) / np.sum(self.x**2, axis=1)
+#            #idx = np.argsort(slopes)[len(slopes)//2]
+#            #target = self.x[idx]
+#            #self.slopes = np.sum(self.x * target, axis=1) / np.sum(self.x**2, axis=1)
+#            #quit(self.slopes)
+#            #self.slopes = np.sign(slopes)
+#            #self.slopes = np.ones(slopes.size)
+#            #print(np.sum(abs(self.slopes[:,None]*self.x - target)))
+#            self.x = self.slopes[:,None] * self.x
+#        else:
+#            self.slopes = np.ones(self.n_samples)
 
     def _pandas_parser(self, df):
+        """
+        Get x, raw, cost, classes from a pandas dataframe.
+        """
         if is_none(df):
             return
         # just to make sure that stuff is sorted
@@ -320,7 +341,10 @@ class Portfolio(Estimators):
         self.cost = np.asarray(times)
         self.classes = classes
 
-    def fit(self ):
+    def fit(self):
+        """
+        Fit the portfolio
+        """
         if self.portfolio == 'zero_mean_min_variance':
             self.weights = self.zero_mean_min_variance()
             self.intercept = 0
@@ -430,26 +454,6 @@ class Portfolio(Estimators):
 
         return self.internal_cv(self.min_squared_mean, l2)
 
-    #def internal_cv(self, method, alphas):
-    #    """
-    #    Determines the optimal regularization parameter of
-    #    the given alphas, for a given method
-    #    """
-
-    #    se = np.zeros((self.n_repeats, alphas.size))
-
-    #    for i, (train, test) in enumerate(self.cv_generator.split(range(self.n_samples))):
-    #        for j, v in enumerate(alphas):
-    #            weights = method(x = self.x[train], alpha = v)
-    #            se[i//self.n_splits, j] += sum(np.sum(weights * self.x[test], axis=1)**2)
-
-    #    best_idx = np.argmin(np.median(se, axis=0))
-    #    #print(best_idx, alphas.size)
-    #    if best_idx == 0:
-    #        print("Warning: Consider lowering the minimum bound for alpha for method %s" % str(method))
-    #    elif best_idx == alphas.size-1:
-    #        print("Warning: Consider raising the minimum bound for alpha for method %s" % str(method))
-    #    return method(alpha = alphas[best_idx])
 
     def internal_cv(self, method, alphas):
         """
@@ -471,36 +475,6 @@ class Portfolio(Estimators):
         elif best_idx == alphas.size-1:
             print("Warning: Consider raising the minimum bound for alpha for method %s" % str(method))
         return method(alpha = alphas[best_idx])
-
-    #def internal_cv(self, method, alphas):
-    #    """
-    #    Determines the optimal regularization parameter of
-    #    the given alphas, for a given method
-    #    """
-
-    #    best_alphas = []
-
-    #    for i, (train, test) in enumerate(self.cv_generator.split(range(self.n_samples))):
-    #        lowest_se = np.inf
-    #        best_alpha_idx = None
-    #        for j, v in enumerate(alphas):
-    #            weights = method(x = self.x[train], alpha = v)
-    #            se = sum(np.sum(weights * self.x[test], axis=1)**2)
-    #            if se <= lowest_se:
-    #                lowest_se = se
-    #                best_alpha_idx = j
-    #        print(best_alpha_idx)
-    #        best_alphas.append(best_alpha_idx)
-
-
-
-    #    best_idx = int(np.median(best_alphas))
-    #    #print(best_idx, alphas.size)
-    #    if best_idx == 0:
-    #        print("Warning: Consider lowering the minimum bound for alpha for method %s" % str(method))
-    #    elif best_idx == alphas.size-1:
-    #        print("Warning: Consider raising the minimum bound for alpha for method %s" % str(method))
-    #    return method(alpha = alphas[best_idx])
 
     def min_variance_upper_mean_bound(self, x = None, alpha = 0):
         """
@@ -593,19 +567,17 @@ class Portfolio(Estimators):
     def elastic_net(self):
         """
         Minimize the squared error of a linear model with l1 and l2 regularization.
-        The regularization parameters are determined by 5 fold cross validation.
+        The regularization parameters are determined by cross validation.
         """
 
         warnings.filterwarnings("ignore", category=ConvergenceWarning)
         warnings.filterwarnings("ignore", category=RuntimeWarning)
         model = sklearn.linear_model.ElasticNetCV(
                 cv = self.cv_generator, 
-                #l1_ratio = [0.0001, 0.001, 0.01, 0.1, .2, 0.5, 0.8, 0.9, 0.99, 1.0],
                 l1_ratio = np.arange(0.0,1.01,0.05),
                 max_iter = 500, positive = self.positive_constraint,
                 alphas = 10**np.arange(-3,4.01,0.25),
-                n_jobs=2, tol=1e-5)
-        
+                n_jobs=self.n_jobs, tol=1e-5)
 
         model.fit(self.raw, (self.raw - self.x)[:,0])
 
@@ -620,7 +592,7 @@ class Portfolio(Estimators):
 
         return model.coef_, model.intercept_
 
-    def constrained_elastic_net(self, x = None, alpha = None, init_weights = None):
+    def constrained_elastic_net(self, x = None, alpha = 0.0, init_weights = None):
         """
         Minimize x'(L+EE')x, where L is a constant times the identity matrix (l2 regularization),
         E is the error of the training set and x is the portfolio weights.
@@ -629,8 +601,6 @@ class Portfolio(Estimators):
 
         if is_none(x):
             x = self.x
-        if is_none(alpha):
-            alpha = self.l2
 
         ### objectives ###
         P = cvxopt.matrix(x.T.dot(x) + alpha*np.identity(self.n_assets))
@@ -676,6 +646,9 @@ class Portfolio(Estimators):
         return self.internal_cv(self.constrained_elastic_net, l2)
 
     def single_method(self):
+        """
+        Choose the single best method.
+        """
         if self.metric == "mae":
             acc = np.mean(abs(self.x), axis=0)
         elif self.metric == "rmsd":
@@ -694,10 +667,10 @@ class Portfolio(Estimators):
         #print(self.id_to_func[idx_class[0]], self.id_to_basis[idx_class[1]], self.id_to_unres[idx_class[2]])
         return self.weights
 
-
-def score(y_pred, metric):#, y = None):
-    #if is_none(y):
-    #    y = np.zeros(y_pred.shape[0])
+def score(y_pred, metric):
+    """
+    Return the score given a metric, where y_pred is the prediction error.
+    """
 
     if metric == 'mae':
         #np.mean(abs(y_pred-y))
@@ -712,6 +685,10 @@ def score(y_pred, metric):#, y = None):
         quit("Unknown metric: %s" % self.metric)
 
 def outer_cv(df, kwargs):
+    """
+    Do outer cross validation to get the prediction errors of a method. 
+    kwargs are a dictionary with options to the Portfolio class.
+    """
 
     if 'n_splits' in kwargs:
         n_splits = kwargs['n_splits']
@@ -759,26 +736,6 @@ def outer_cv(df, kwargs):
 
     return portfolio_energies
 
-
-
-
-    #print(abs(portfolio_energies).max(), np.sqrt(np.mean((portfolio_energies)**2)), np.mean(abs(portfolio_energies)))
-    #fig, ax = plt.subplots()
-
-    #ax.scatter(abs(portfolio_energies), abs(ref))
-    #lims = [
-    #        np.min([ax.get_xlim(), ax.get_ylim()]),  # min of both axes
-    #        np.max([ax.get_xlim(), ax.get_ylim()]),  # max of both axes
-    #        ]
-    #
-    ## now plot both limits against eachother
-    #ax.plot(lims, lims, 'k-', alpha=0.75, zorder=0)
-    #ax.set_aspect('equal')
-    #ax.set_xlim(lims)
-    #ax.set_ylim(lims)
-
-    #plt.show()
-
 def print_statistics(d):
     for key, value in d.items():
         print("{:25s} {:>.2f} {:>.2f} {:>.2f}".format(key, score(value, metric='max'),  score(value, metric='rmsd'),  score(value, metric='mae')))
@@ -794,8 +751,8 @@ def evaluate_all_methods(df, n_splits = 3, n_repeats = 1):
     ##    'n_splits': n_splits, 'n_repeats': n_repeats})
     ##errors['positive_elastic_net'] = outer_cv(df, {"positive_constraint": 1, "portfolio": "elastic_net", 
     ##    'n_splits': n_splits, 'n_repeats': n_repeats})
-    errors['constrained_elastic_net'] = outer_cv(df, {"portfolio": "constrained_elastic_net",
-        'n_splits': n_splits, 'n_repeats': n_repeats})
+    #errors['constrained_elastic_net'] = outer_cv(df, {"portfolio": "constrained_elastic_net",
+    #    'n_splits': n_splits, 'n_repeats': n_repeats})
     #errors['constrained_elastic_net_cv'] = outer_cv(df, {"portfolio": "constrained_elastic_net_cv",
     #    'n_splits': n_splits, 'n_repeats': n_repeats})
     ##errors['zero_mean_min_variance'] = outer_cv(df, {"positive_constraint": 0, "portfolio": "zero_mean_min_variance",
@@ -832,17 +789,13 @@ def evaluate_all_methods(df, n_splits = 3, n_repeats = 1):
     #    'n_splits': n_splits, 'n_repeats': n_repeats})
     ##errors['min_squared_mean'] = outer_cv(df, {"positive_constraint": 0, "portfolio": "min_squared_mean",
     ##    'n_splits': n_splits, 'n_repeats': n_repeats})
-    errors['positive_min_squared_mean'] = outer_cv(df, {"positive_constraint": 1, "portfolio": "min_squared_mean",
-        'n_splits': n_splits, 'n_repeats': n_repeats})
-    errors['positive_min_squared_mean_diag'] = outer_cv(df, {"positive_constraint": 1, "portfolio": "min_squared_mean", "cov_estimator":"diag",
-        'n_splits': n_splits, 'n_repeats': n_repeats})
+    #errors['positive_min_squared_mean'] = outer_cv(df, {"positive_constraint": 1, "portfolio": "min_squared_mean",
+    #    'n_splits': n_splits, 'n_repeats': n_repeats})
+    #errors['positive_min_squared_mean_diag'] = outer_cv(df, {"positive_constraint": 1, "portfolio": "min_squared_mean", "cov_estimator":"diag",
+    #    'n_splits': n_splits, 'n_repeats': n_repeats})
     ##errors['min_squared_mean_cv'] = outer_cv(df, {"positive_constraint": 0, "portfolio": "min_squared_mean_cv",
     ##    'n_splits': n_splits, 'n_repeats': n_repeats})
     #errors['positive_min_squared_mean_cv'] = outer_cv(df, {"positive_constraint": 1, "portfolio": "min_squared_mean_cv",
-    #    'n_splits': n_splits, 'n_repeats': n_repeats})
-    #errors['oracle'] = outer_cv(df, {"cov_estimator": "oas", "positive_constraint": 1, "portfolio": "min_squared_mean",
-    #    'n_splits': n_splits, 'n_repeats': n_repeats})
-    #errors['lw_cv'] = outer_cv(df, {"cov_estimator": "lw", "positive_constraint": 1, "portfolio": "min_squared_mean_cv",
     #    'n_splits': n_splits, 'n_repeats': n_repeats})
 
     #fig, ax = plt.subplots()
@@ -866,25 +819,10 @@ def evaluate_all_methods(df, n_splits = 3, n_repeats = 1):
 
 
 ### TODO
-# weights
 # parallel joblib
-# scaling
-# timings
 # bayes (pomegranate / pymc)
-# mixtures
-# elastic net
-# t-distribution
-# classification of error
-# support both elastic net and portfolio methods
-# cv distribution / means, cov etc.
-# predict call
-
-# Tasks
-# compare methods using all data points (linear, normal, t, mixture)/(binary scaling, linear scaling)
-# select best
-# Repeat for maximum different basis sets
-# Time vs accuracy
-# Classification of error from probability
+# Hierarchical method to determine what data should be included in training
+# Neural network
 
 if __name__ == "__main__":
 
@@ -893,12 +831,8 @@ if __name__ == "__main__":
 
     df = pd.read_pickle(sys.argv[1])
     #df = df.loc[(df.dataset == "abde12")]
-    df = df.loc[(df.basis == 'qzvp') & (df.unrestricted == True)]
-    #m = Portfolio(df=df)
-    #mix = sklearn.mixture.GaussianMixture(n_components=4, covariance_type='full')
-    #mix.fit(m.x)
-    #print(mix.bic(m.x), mix.aic(m.x))
-    #quit()
+    #df = df.loc[(df.basis == 'qzvp') & (df.unrestricted == True)]
+
     #evaluate_all_methods(df, n_splits = 15, n_repeats = 5)
     evaluate_all_methods(df, n_splits = 5, n_repeats = 3)
     #evaluate_all_methods(df, n_splits = 3, n_repeats = 1)
