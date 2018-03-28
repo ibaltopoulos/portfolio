@@ -1,0 +1,128 @@
+Warning: Increase alpha range. Best alpha was 0.001
+0
+Warning: Consider lowering the minimum bound for alpha for method <bound method Portfolio.constrained_elastic_net of <__main__.Portfolio object at 0x7f740d2abe80>>
+1
+2
+3
+Warning: Consider raising the minimum bound for alpha for method <bound method Portfolio.min_variance_upper_mean_bound of <__main__.Portfolio object at 0x7f7403137828>>
+Warning: Consider raising the minimum bound for alpha for method <bound method Portfolio.min_variance_upper_mean_bound of <__main__.Portfolio object at 0x7f7417875a58>>
+Warning: Consider raising the minimum bound for alpha for method <bound method Portfolio.min_variance_upper_mean_bound of <__main__.Portfolio object at 0x7f7403137780>>
+Warning: Consider raising the minimum bound for alpha for method <bound method Portfolio.min_variance_upper_mean_bound of <__main__.Portfolio object at 0x7f7403132320>>
+Warning: Consider raising the minimum bound for alpha for method <bound method Portfolio.min_variance_upper_mean_bound of <__main__.Portfolio object at 0x7f7403134cc0>>
+Warning: Consider raising the minimum bound for alpha for method <bound method Portfolio.min_variance_upper_mean_bound of <__main__.Portfolio object at 0x7f7417875ac8>>
+Warning: Consider raising the minimum bound for alpha for method <bound method Portfolio.min_variance_upper_mean_bound of <__main__.Portfolio object at 0x7f7403134e48>>
+4
+Method: single_method
+max: 21.46  rmsd: 7.01  mae: 5.13
+1.000 M08-SO/svp
+
+Method: elastic_net
+max: 136.11  rmsd: 18.24  mae: 5.55
+
+Method: elastic_net_no_intercept
+max: 81.83  rmsd: 11.59  mae: 4.83
+
+Method: positive_elastic_net
+max: 19.60  rmsd: 7.06  mae: 5.09
+0.382 M08-SO/svp
+0.315 M06-HF/svp
+0.163 uM06-HF/svp
+0.077 M08-HX/svp
+0.040 uM08-HX/svp
+
+Method: positive_elastic_net_no_intercept
+max: 19.94  rmsd: 7.36  mae: 5.37
+0.504 M06-HF/svp
+0.147 M06/svp
+0.104 M06-HF/SV-P
+0.061 M08-SO/svp
+0.050 uM06-HF/svp
+0.047 uBH-LYP/svp
+0.018 uM06/svp
+0.014 uM06-2X/svp
+0.012 BH-LYP/svp
+
+Method: constrained_elastic_net
+max: 20.89  rmsd: 7.02  mae: 4.82
+0.556 uM08-SO/svp
+0.387 uM06-HF/svp
+0.057 M08-SO/svp
+
+Method: constrained_elastic_net_cv
+max: 20.87  rmsd: 7.04  mae: 4.83
+0.556 uM08-SO/svp
+0.387 uM06-HF/svp
+0.057 M08-SO/svp
+
+Method: positive_zero_mean_min_variance
+max: 22.26  rmsd: 7.67  mae: 5.19
+0.779 uM08-SO/svp
+0.177 uM06-HF/svp
+0.011 uB/svp
+0.011 uBECKE/svp
+0.011 uHFB/svp
+0.011 uB88X/svp
+
+Method: positive_zero_mean_min_variance_cv
+max: 22.26  rmsd: 7.67  mae: 5.19
+0.779 uM08-SO/svp
+0.177 uM06-HF/svp
+0.011 uB88X/svp
+0.011 uB/svp
+0.011 uBECKE/svp
+0.011 uHFB/svp
+
+Method: positive_min_variance_upper_mean_bound_half
+max: 21.24  rmsd: 7.37  mae: 5.04
+0.785 uM08-SO/svp
+0.209 uM06-HF/svp
+
+Method: positive_min_variance_upper_mean_bound_cv_half
+max: 21.24  rmsd: 7.37  mae: 5.04
+0.785 uM08-SO/svp
+0.209 uM06-HF/svp
+
+Method: positive_min_variance_upper_mean_bound_1
+max: 20.81  rmsd: 7.16  mae: 4.97
+0.633 uM08-SO/svp
+0.367 uM06-HF/svp
+
+Method: positive_min_variance_upper_mean_bound_cv_1
+max: 20.81  rmsd: 7.16  mae: 4.97
+0.633 uM08-SO/svp
+0.367 uM06-HF/svp
+
+Method: positive_min_variance_upper_mean_bound_2
+max: 21.08  rmsd: 7.06  mae: 4.94
+0.582 M08-SO/svp
+0.418 uM06-HF/svp
+
+Method: positive_min_variance_upper_mean_bound_cv_2
+max: 21.08  rmsd: 7.06  mae: 4.94
+0.582 M08-SO/svp
+0.418 uM06-HF/svp
+
+Method: positive_min_squared_mean
+max: 20.90  rmsd: 7.02  mae: 4.82
+0.549 uM08-SO/svp
+0.387 uM06-HF/svp
+0.064 M08-SO/svp
+
+Method: positive_min_squared_mean_cv
+max: 20.89  rmsd: 7.02  mae: 4.82
+0.549 uM08-SO/svp
+0.387 uM06-HF/svp
+0.064 M08-SO/svp
+
+Method: oracle
+max: 26.83  rmsd: 10.63  mae: 7.55
+0.011 MM06-HF/svp
+0.011 M06-HF/svp
+0.011 uMM06-HF/svp
+0.011 uM06-HF/svp
+0.011 uMM06-HF/SV-P
+0.011 uM06-HF/SV-P
+0.010 MM06-HF/SV-P
+0.010 M06-HF/SV-P
+0.010 MM05-2X/svp
+

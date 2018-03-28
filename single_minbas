@@ -1,0 +1,143 @@
+0
+Warning: Consider raising the minimum bound for alpha for method <bound method Portfolio.constrained_elastic_net of <__main__.Portfolio object at 0x7f10662d86a0>>
+Warning: Consider raising the minimum bound for alpha for method <bound method Portfolio.constrained_elastic_net of <__main__.Portfolio object at 0x7f10662da128>>
+Warning: Consider raising the minimum bound for alpha for method <bound method Portfolio.constrained_elastic_net of <__main__.Portfolio object at 0x7f10662da940>>
+1
+2
+3
+Warning: Consider raising the minimum bound for alpha for method <bound method Portfolio.min_variance_upper_mean_bound of <__main__.Portfolio object at 0x7f10662d8208>>
+Warning: Consider raising the minimum bound for alpha for method <bound method Portfolio.min_variance_upper_mean_bound of <__main__.Portfolio object at 0x7f10662d89b0>>
+Warning: Consider raising the minimum bound for alpha for method <bound method Portfolio.min_variance_upper_mean_bound of <__main__.Portfolio object at 0x7f10662d8ac8>>
+Warning: Consider raising the minimum bound for alpha for method <bound method Portfolio.min_variance_upper_mean_bound of <__main__.Portfolio object at 0x7f1070451dd8>>
+Warning: Consider raising the minimum bound for alpha for method <bound method Portfolio.min_variance_upper_mean_bound of <__main__.Portfolio object at 0x7f10662d8b38>>
+Warning: Consider raising the minimum bound for alpha for method <bound method Portfolio.min_variance_upper_mean_bound of <__main__.Portfolio object at 0x7f10662d8780>>
+Warning: Consider raising the minimum bound for alpha for method <bound method Portfolio.min_variance_upper_mean_bound of <__main__.Portfolio object at 0x7f10662d8ac8>>
+Warning: Consider raising the minimum bound for alpha for method <bound method Portfolio.min_variance_upper_mean_bound of <__main__.Portfolio object at 0x7f10662d8b70>>
+Warning: Consider raising the minimum bound for alpha for method <bound method Portfolio.min_variance_upper_mean_bound of <__main__.Portfolio object at 0x7f10662d83c8>>
+Warning: Consider raising the minimum bound for alpha for method <bound method Portfolio.min_variance_upper_mean_bound of <__main__.Portfolio object at 0x7f1070451dd8>>
+4
+Method: single_method
+max: 172.72  rmsd: 43.44  mae: 30.46
+1.000 uM11-L/sto-3g
+
+Method: elastic_net
+max: 2001.65  rmsd: 261.71  mae: 50.96
+
+Method: elastic_net_no_intercept
+max: 1578.97  rmsd: 207.38  mae: 45.55
+
+Method: positive_elastic_net
+max: 88.76  rmsd: 33.09  mae: 26.77
+0.062 uM11-L/sto-3g
+0.043 MM06-HF/sto-3g
+0.043 M06-HF/sto-3g
+0.039 M06-2X/sto-3g
+0.033 uM06-HF/sto-3g
+0.032 M08-SO/sto-3g
+0.032 uMM06-HF/sto-3g
+0.030 uM06/sto-3g
+0.028 uM06-2X/sto-3g
+0.023 uM08-SO/sto-3g
+
+Method: positive_elastic_net_no_intercept
+max: 103.65  rmsd: 33.66  mae: 25.15
+0.087 uM11-L/sto-3g
+0.082 MM06-HF/sto-3g
+0.082 M06-HF/sto-3g
+0.057 M06-2X/sto-3g
+0.050 uM06-HF/sto-3g
+0.049 uMM06-HF/sto-3g
+0.046 M08-SO/sto-3g
+0.029 uM06-2X/sto-3g
+0.028 M08-HX/sto-3g
+0.022 uM06/sto-3g
+
+Method: constrained_elastic_net
+max: 171.62  rmsd: 42.53  mae: 29.91
+0.765 uM11-L/sto-3g
+0.235 uM05/sto-3g
+
+Method: constrained_elastic_net_cv
+max: 173.82  rmsd: 43.43  mae: 30.50
+0.765 uM11-L/sto-3g
+0.235 uM05/sto-3g
+
+Method: positive_zero_mean_min_variance
+max: 175.83  rmsd: 45.88  mae: 31.95
+0.694 uM05/sto-3g
+0.077 uB/sto-3g
+0.077 uBECKE/sto-3g
+0.077 uB88X/sto-3g
+0.077 uHFB/sto-3g
+
+Method: positive_zero_mean_min_variance_cv
+max: 175.83  rmsd: 45.88  mae: 31.95
+0.694 uM05/sto-3g
+0.077 uB/sto-3g
+0.077 uB88X/sto-3g
+0.077 uBECKE/sto-3g
+0.077 uHFB/sto-3g
+
+Method: positive_min_variance_upper_mean_bound_half
+max: 174.86  rmsd: 45.47  mae: 31.88
+0.775 uM05/sto-3g
+0.056 uB/sto-3g
+0.056 uB88X/sto-3g
+0.056 uHFB/sto-3g
+0.056 uBECKE/sto-3g
+
+Method: positive_min_variance_upper_mean_bound_cv_half
+max: 174.86  rmsd: 45.47  mae: 31.88
+0.775 uM05/sto-3g
+0.056 uHFB/sto-3g
+0.056 uB/sto-3g
+0.056 uBECKE/sto-3g
+0.056 uB88X/sto-3g
+
+Method: positive_min_variance_upper_mean_bound_1
+max: 173.88  rmsd: 45.13  mae: 31.78
+0.856 uM05/sto-3g
+0.036 uHFB/sto-3g
+0.036 uBECKE/sto-3g
+0.036 uB88X/sto-3g
+0.036 uB/sto-3g
+
+Method: positive_min_variance_upper_mean_bound_cv_1
+max: 173.88  rmsd: 45.13  mae: 31.78
+0.856 uM05/sto-3g
+0.036 uB88X/sto-3g
+0.036 uB/sto-3g
+0.036 uBECKE/sto-3g
+0.036 uHFB/sto-3g
+
+Method: positive_min_variance_upper_mean_bound_2
+max: 171.94  rmsd: 44.50  mae: 31.49
+0.921 uM05/sto-3g
+0.067 uVS99/sto-3g
+
+Method: positive_min_variance_upper_mean_bound_cv_2
+max: 171.94  rmsd: 44.50  mae: 31.49
+0.921 uM05/sto-3g
+0.067 uVS99/sto-3g
+
+Method: positive_min_squared_mean
+max: 171.61  rmsd: 42.52  mae: 29.91
+0.768 uM11-L/sto-3g
+0.232 uM05/sto-3g
+
+Method: positive_min_squared_mean_cv
+max: 171.63  rmsd: 42.53  mae: 29.91
+
+Method: oracle
+max: 406.79  rmsd: 69.67  mae: 37.22
+0.025 uM05-2X/sto-3g
+0.025 uM05/sto-3g
+0.025 uM11-L/sto-3g
+0.025 uBH-LYP/sto-3g
+0.024 uMM05/sto-3g
+0.024 uM06/sto-3g
+0.023 uMM05-2X/sto-3g
+0.023 M08-SO/sto-3g
+0.023 M06-2X/sto-3g
+0.023 uM08-SO/sto-3g
+

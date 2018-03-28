@@ -288,25 +288,18 @@ def set_median_timings(df):
                 time = np.median(hybrid_meta_df.time.as_matrix())
                 df.at[hybrid_meta_df.index, "time"] = time
 
-def set_expensive_timings(df):
+def simplify_timings(base_df, reaction_name):
     """
-    Get the most expensive reaction and set the cost
-    of all the reactions to match this.
+    Set timings for all reactions to be equal to a named reaciton
     """
-
-    cost = df.loc[(df.functional == 'M06-2X') & (df.basis == 'qzvp') & (df.unrestricted == True)].time.as_matrix()
-
-    unique_functionals = df.functional.unique()
-    unique_basis = df.basis.unique()
-
-    for func in unique_functionals:
-        for un in True, False:
-            for bas in unique_basis:
-                sub_df = df.loc[(df.functional == func) & (df.basis == bas) & (df.unrestricted == un)]
-                df.at[sub_df.index, "time"] = cost
-
+    df = base_df.copy()
+    for func in df.functional.unique():
+        for basis in df.basis.unique():
+            for unres in True, False:
+                sub_df = df.loc[(df.functional == func) & (df.basis == basis) & (df.unrestricted == unres)]
+                time = sub_df.loc[(sub_df.reaction == reaction_name)].time.as_matrix()[0]
+                df.at[sub_df.index, "time"] = time
     return df
-
 
 def main():
     """
@@ -319,6 +312,11 @@ def main():
     df = abde12_reac.append(nhtbh38_reac, ignore_index = True)
     df.to_pickle("pickles/combined_reac.pkl")
     print(df.head())
+    df2 = df.loc[(df.functional == "PBE0") & (df.basis == "qzvp") & (df.unrestricted == True)].time
+    slow_name = df.at[df2.idxmax(), "reaction"]
+    slow_df = simplify_timings(df, slow_name)
+    print(slow_name)
+    slow_df.to_pickle("combined_reac_slow.pkl")
 
     # Set cost to match the most expensive reaction
     df = set_expensive_timings(df)
