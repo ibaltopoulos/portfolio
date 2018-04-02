@@ -22,6 +22,10 @@ def data_parse(filename):
         for line in lines[-3::-1]:
             if "CPU TIMES" in line:
                 time = float(line.split()[3])
+                if "uCCSD" not in filename:
+                    break
+            if "F12b" in line:
+                energy = float(line.split()[-1])
                 break
         else:
             return None, None
@@ -306,16 +310,20 @@ def main():
     Create all the reaction pickles
     """
     abde12_reac = make_pickles("abde12")
+    df = abde12_reac
+    df = df.loc[(df.functional == "M06-2X") & (df.basis == "avtz") & (df.unrestricted == True)]
+    print(df[["reaction", "energy"]])
+    quit()
     nhtbh38_reac = make_pickles("nhtbh38")
 
     # combine
     df = abde12_reac.append(nhtbh38_reac, ignore_index = True)
     df.to_pickle("pickles/combined_reac.pkl")
-    print(df.head())
+    #print(df.head())
     df2 = df.loc[(df.functional == "PBE0") & (df.basis == "qzvp") & (df.unrestricted == True)].time
     slow_name = df.at[df2.idxmax(), "reaction"]
     slow_df = simplify_timings(df, slow_name)
-    print(slow_name)
+    #print(slow_name)
     slow_df.to_pickle("combined_reac_slow.pkl")
 
     # Set cost to match the most expensive reaction
