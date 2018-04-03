@@ -6,6 +6,7 @@ import tensorflow as tf
 from utils import is_positive_or_zero, is_positive, is_positive_integer, \
     is_string, InputError
 from sklearn.utils.validation import check_X_y, check_array
+import matplotlib.pyplot as plt
 #from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error
 #import matplotlib.pyplot as plt
 
@@ -659,15 +660,18 @@ class SingleLayeredNeuralNetwork(_NN):
 if __name__ == "__main__":
     np.random.seed(42)
     #m = ConstrainedElasticNet(learning_rate = 1e1, iterations = 100)
-    m = SingleLayeredNeuralNetwork(learning_rate = 1e-1, n_hidden = 5, iterations = 1000)
-    x = np.random.random((1000,7))
-    a = np.random.random(7)
+    m = SingleLayeredNeuralNetwork(learning_rate = 1e-1, n_hidden = 20, iterations = 10000)
+    x = np.random.random((1000,50))
+    a = np.random.random(50)
     a /= a.sum()
     y = np.sum(x * a, 1)
 
     m.fit(x[:800],y[:800])
 
     y_pred = m.predict(x[800:])
+
+    plt.scatter(y[800:], y_pred)
+    plt.show()
 
     score = sum((y[800:]-y_pred)**2 / 1000)**0.5
     print(score)
