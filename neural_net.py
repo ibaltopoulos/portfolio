@@ -31,7 +31,7 @@ def _is_integer(x):
     return (_is_numeric(x) and (float(x) == int(x)))
 
 # custom exception to raise when we intentionally catch an error
-class inputerror(exception):
+class Inputerror(Exception):
     pass
 
 
@@ -365,8 +365,6 @@ class _NN(object):
             feed_dict = {tf_x: x, tf_y: y}
             opt, avg_cost = self.session.run([optimizer, cost], feed_dict=feed_dict)
             self.training_cost.append(avg_cost)
-            w = weights.eval(session = self.session)
-            print(np.exp(w) / sum(np.exp(w)))
             print(i, avg_cost)
 
     def _cost(self, y_pred, tf_y, weights):
@@ -559,11 +557,11 @@ class SingleLayeredNeuralNetwork(_NN):
 
     """
 
-    def __init__(self, n_hidden = 5, activation_function = "sigmoid", , **kwargs):
+    def __init__(self, n_hidden = 5, activation_function = "sigmoid", **kwargs):
         super(SingleLayeredNeuralNetwork, self).__init__(**kwargs)
 
         self.n_hidden = n_hidden
-        self.activation_function = self._set_activation_function(activation_function)
+        self._set_activation_function(activation_function)
 
     def _set_activation_function(self, activation_function):
         if activation_function in ['sigmoid', tf.nn.sigmoid]:
@@ -626,7 +624,7 @@ class SingleLayeredNeuralNetwork(_NN):
         h = self.activation_function(z)
 
         # Add up contributions (name must be 'y')
-        z = tf.matmul(z, h, name = 'y')
+        z = tf.add(tf.matmul(h, weights[1]), biases[1], name = 'y')
 
         return z
 
@@ -660,7 +658,7 @@ class SingleLayeredNeuralNetwork(_NN):
 if __name__ == "__main__":
     np.random.seed(42)
     #m = ConstrainedElasticNet(learning_rate = 1e1, iterations = 100)
-    m = SingleLayeredNeuralNetwork(learning_rate = 1e1, iterations = 100)
+    m = SingleLayeredNeuralNetwork(learning_rate = 1e-1, iterations = 5000)
     x = np.random.random((100,3))
     a = np.random.random(3)
     a /= a.sum()
