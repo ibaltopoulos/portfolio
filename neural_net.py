@@ -9,6 +9,31 @@ from sklearn.utils.validation import check_X_y#, check_array
 #from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error
 #import matplotlib.pyplot as plt
 
+def is_positive(x):
+    return (not is_array_like(x) and _is_numeric(x) and x > 0)
+
+def is_positive_or_zero(x):
+    return (not is_array_like(x) and _is_numeric(x) and x >= 0)
+
+def is_array_like(x):
+    return isinstance(x, (tuple, list, np.ndarray))
+
+def is_positive_integer(x):
+    return (not is_array_like(x) and _is_integer(x) and x > 0)
+
+def is_string(x):
+    return isinstance(x, str)
+
+def _is_numeric(x):
+    return isinstance(x, (float, int))
+
+def _is_integer(x):
+    return (_is_numeric(x) and (float(x) == int(x)))
+
+# custom exception to raise when we intentionally catch an error
+class inputerror(exception):
+    pass
+
 
 class Osprey(BaseEstimator):
     """
@@ -70,7 +95,7 @@ class _NN(object):
 
     """
 
-    def __init__(self, learning_rate = 0.001, iterations = 500, l1_reg = 0.0, l2_reg = 0.0, 
+    def __init__(self, learning_rate = 0.01, iterations = 500, l1_reg = 0.0, l2_reg = 0.0, 
             scoring_function = 'rmsd', **kwargs):
         """
         :param l1_reg: L1-regularisation parameter for the neural network weights
@@ -381,6 +406,16 @@ class _NN(object):
 
         return w
 
+    def _init_bias(self, n):
+        """
+        Generate a tensor of biases of size n.
+
+        """
+
+        b = tf.Variable(tf.zeros([n], dtype = tf.float32))
+
+        return b
+
     def _score_r2(self, x, y, sample_weight=None):
         """
         Calculate the coefficient of determination (R^2).
@@ -460,6 +495,18 @@ class ConstrainedElasticNet(_NN):
     def __init__(self, **kwargs):
         super(ConstrainedElasticNet, self).__init__(**kwargs)
 
+    def _generate_weights(self):
+        """
+        Generates the weights.
+
+        :return: tuple of weights and biases, however there are no biases in this model.
+        :rtype: tuple
+        """
+
+        weights = self._init_weight(self.n_features, 1)
+
+        return weights, None
+
     def _model(self, x, weights, biases = None):
         """
         Constructs the actual network.
@@ -490,7 +537,7 @@ class ConstrainedElasticNet(_NN):
         :param y: True output
         :type y: tf.placeholder of shape (None, 1)
         :param weights: Weights used in the network.
-        :type weights: tf.Variable of shape (hidden_layer_sizes.size + 1, 1)
+        :type weights: tf.Variable of shape (n_features, 1)
         :return: Cost
         :rtype: tf.Variable of size (1,)
         """
@@ -504,89 +551,116 @@ class ConstrainedElasticNet(_NN):
 
         return cost
 
+
+class SingleLayeredNeuralNetwork(_NN):
+    """
+    Neural net with a single hidden layer.
+    Hyper-parameters are l1_reg, l2_reg, n_hidden
+
+    """
+
+    def __init__(self, n_hidden = 5, activation_function = "sigmoid", , **kwargs):
+        super(SingleLayeredNeuralNetwork, self).__init__(**kwargs)
+
+        self.n_hidden = n_hidden
+        self.activation_function = self._set_activation_function(activation_function)
+
+    def _set_activation_function(self, activation_function):
+        if activation_function in ['sigmoid', tf.nn.sigmoid]:
+            self.activation_function = tf.nn.sigmoid
+        elif activation_function in ['tanh', tf.nn.tanh]:
+            self.activation_function = tf.nn.tanh
+        elif activation_function in ['elu', tf.nn.elu]:
+            self.activation_function = tf.nn.elu
+        elif activation_function in ['softplus', tf.nn.softplus]:
+            self.activation_function = tf.nn.softplus
+        elif activation_function in ['softsign', tf.nn.softsign]:
+            self.activation_function = tf.nn.softsign
+        elif activation_function in ['relu', tf.nn.relu]:
+            self.activation_function = tf.nn.relu
+        elif activation_function in ['relu6', tf.nn.relu6]:
+            self.activation_function = tf.nn.relu6
+        elif activation_function in ['crelu', tf.nn.crelu]:
+            self.activation_function = tf.nn.crelu
+        elif activation_function in ['relu_x', tf.nn.relu_x]:
+            self.activation_function = tf.nn.relu_x
+        else:
+            raise InputError("Unknown activation function. Got %s" % str(activation_function))
+
     def _generate_weights(self):
         """
         Generates the weights.
 
-        :return: tuple of weights and biases, however there are no biases in this model.
+        :return: tuple of weights and biases
         :rtype: tuple
         """
 
-        weights = self._init_weight(self.n_features, 1)
+        weights, biases = [], []
 
-        return weights, None
+        weights.append(self._init_weight(self.n_features, self.n_hidden))
+        weights.append(self._init_weight(self.n_hidden, 1))
+
+        biases.append(self._init_bias(self.n_hidden))
+        biases.append(self._init_bias(1))
+
+        return weights, biases
 
 
-#    # TODO test
-#    def fit(self, indices, y = None):
-#        """
-#        Fit the neural network to a set of molecular descriptors and targets. It is assumed that QML compounds and
-#        properties have been set in advance and which indices to use is given.
-#
-#        :param y: Dummy for osprey
-#        :type y: None
-#        :param indices: Which indices of the pregenerated QML compounds and properties to use.
-#        :type indices: integer array
-#
-#        """
-#
-#        x = self.get_descriptors_from_indices(indices)
-#
-#        idx = np.asarray(indices, dtype = int).ravel()
-#        y = self.properties[idx]
-#
-#        return self._fit(x, y)
-#
-#    def predict(self, indices):
-#        x = self.get_descriptors_from_indices(indices)
-#        return self._predict(x)
+    def _model(self, x, weights, biases = None):
+        """
+        Constructs the actual network.
 
-#
-#    def _init_bias(self, n):
-#        """
-#        Generate a tensor of biases of size n.
-#
-#        """
-#
-#        b = tf.Variable(tf.zeros([n], dtype = tf.float32))
-#
-#        return b
-#
-#    def _generate_weights(self, n_out):
-#        """
-#        Generates the weights and the biases, by looking at the size of the hidden layers,
-#        the number of features in the descriptor and the number of outputs. The weights are initialised from
-#        a zero centered normal distribution with precision :math:`\\tau = a_{m}`, where :math:`a_{m}` is the number
-#        of incoming connections to a neuron. Weights larger than two standard deviations from the mean is
-#        redrawn.
-#
-#        :param n_out: Number of outputs
-#        :type n_out: integer
-#        :return: tuple of weights and biases, each being of length (n_hidden_layers + 1)
-#        :rtype: tuple
-#        """
-#
-#        weights = []
-#        biases = []
-#
-#        # Weights from input layer to first hidden layer
-#        weights.append(self._init_weight(self.hidden_layer_sizes[0], self.n_features, 'weight_in'))
-#        biases.append(self._init_bias(self.hidden_layer_sizes[0], 'bias_in'))
-#
-#        # Weights from one hidden layer to the next
-#        for i in range(1, self.hidden_layer_sizes.size):
-#            weights.append(self._init_weight(self.hidden_layer_sizes[i], self.hidden_layer_sizes[i-1], 'weight_hidden_%d' %i))
-#            biases.append(self._init_bias(self.hidden_layer_sizes[i], 'bias_hidden_%d' % i))
-#
-#        # Weights from last hidden layer to output layer
-#        weights.append(self._init_weight(n_out, self.hidden_layer_sizes[-1], 'weight_out'))
-#        biases.append(self._init_bias(n_out, 'bias_out'))
-#
-#        return weights, biases
+        :param x: Input
+        :type x: tf.placeholder of shape (None, n_features)
+        :param weights: Weights used in the network.
+        :type weights: list of tf.Variables of shape (n_features, n_hidden)
+            and (n_hidden, 1)
+        :param biases: Biases used in the network
+        :type weights: list of tf.Variables of shape (n_hidden,) and (1,)
+        :return: Output
+        :rtype: tf.Variable of size (None, n_targets)
+        """
+
+        # get activations of hidden layer
+        z = tf.add(tf.matmul(x, weights[0]), biases[0])
+        h = self.activation_function(z)
+
+        # Add up contributions (name must be 'y')
+        z = tf.matmul(z, h, name = 'y')
+
+        return z
+
+    def _cost(self, y_pred, y, weights):
+        """
+        Constructs the cost function
+
+        :param y_pred: Predicted output
+        :type y_pred: tf.Variable of size (None, 1)
+        :param y: True output
+        :type y: tf.placeholder of shape (None, 1)
+        :param weights: Weights used in the network.
+        :type weights: list of tf.Variable
+        :return: Cost
+        :rtype: tf.Variable of size (1,)
+        """
+
+        err = tf.square(tf.subtract(y,y_pred))
+        loss = tf.reduce_mean(err)
+        cost = loss
+        if self.l2_reg > 0:
+            l2_loss = self._l2_loss(weights)
+            cost = cost + l2_loss
+        if self.l1_reg > 0:
+            l1_loss = self._l1_loss(weights)
+            cost = cost + l1_loss
+
+        return cost
+
 
 if __name__ == "__main__":
     np.random.seed(42)
-    m = ConstrainedElasticNet(learning_rate = 1e1, iterations = 100)
+    #m = ConstrainedElasticNet(learning_rate = 1e1, iterations = 100)
+    m = SingleLayeredNeuralNetwork(learning_rate = 1e1, iterations = 100)
     x = np.random.random((100,3))
     a = np.random.random(3)
     a /= a.sum()
