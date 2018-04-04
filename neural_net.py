@@ -94,7 +94,6 @@ class Osprey(BaseEstimator):
                 else:
                     params[p.name] = p.default
 
-
         return params
 
     def set_params(self, **params):
