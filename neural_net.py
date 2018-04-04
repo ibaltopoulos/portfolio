@@ -5,6 +5,7 @@ from sklearn.base import BaseEstimator
 import tensorflow as tf
 from utils import is_positive_or_zero, is_positive, is_positive_integer, \
     is_string, InputError
+from inspect import signature
 from sklearn.utils.validation import check_X_y, check_array
 import matplotlib.pyplot as plt
 #from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error
@@ -32,7 +33,7 @@ def _is_integer(x):
     return (_is_numeric(x) and (float(x) == int(x)))
 
 # custom exception to raise when we intentionally catch an error
-class Inputerror(Exception):
+class InputError(Exception):
     pass
 
 
@@ -45,7 +46,6 @@ class Osprey(BaseEstimator):
     def __init__(self, **kwargs):
         pass
 
-
     def get_params(self, deep = True):
         """
         Hack that overrides the get_params routine of BaseEstimator.
@@ -54,16 +54,46 @@ class Osprey(BaseEstimator):
         __init__ of all the parents as well.
 
         """
-        params = BaseEstimator.get_params(self)
-        parent_init = super(Osprey, self).__init__
+        import inspect
+        from optparse import OptionParser
+        from inspect import getargvalues, stack
+        import ast
 
-        # Modified from the scikit-learn BaseEstimator class
-        parent_init_signature = signature(parent_init)
-        for p in (p for p in parent_init_signature.parameters.values() 
-                if p.name != 'self' and p.kind != p.VAR_KEYWORD):
-            if p.name in params:
-                raise InputError('This should never happen')
-            params[p.name] = p.default
+        # First get the name of the class self belongs to
+        name_of_class = self.__class__.__name__
+
+        # Then get names of the parents and their parents etc
+        # excluding 'object'
+        names_of_parents = [c.__name__ for c in eval(name_of_class + ".__bases__") if c.__name__ not in "object"]
+        # limit to 10 generations to avoid infinite loop
+        for i in range(10):
+            new_parents = False
+            for name in names_of_parents:
+                new_names_of_parents = [c.__name__ for c in eval(name + ".__bases__")]
+                for new_name in new_names_of_parents:
+                    if new_name not in names_of_parents and new_name != "object":
+                        names_of_parents.append(new_name)
+                        new_parents = True
+            if not new_parents:
+                break
+        else:
+            print("Warning: Only included first 10 generations of parents of the called class")
+
+        params = BaseEstimator.get_params(self)
+        for parent in names_of_parents:
+            parent_init = eval(parent + ".__init__")
+
+            # Modified from the scikit-learn BaseEstimator class
+            parent_init_signature = signature(parent_init)
+            for p in (p for p in parent_init_signature.parameters.values() 
+                    if p.name != 'self' and p.kind != p.VAR_KEYWORD):
+                if p.name in params:
+                    raise InputError('This should never happen')
+                if hasattr(self, p.name):
+                    params[p.name] = getattr(self, p.name)
+                else:
+                    params[p.name] = p.default
+
 
         return params
 
@@ -483,7 +513,7 @@ class _NN(object):
         return rmse
 
 
-class ConstrainedElasticNet(_NN):
+class ConstrainedElasticNet(_NN, Osprey):
     """
     Solves a elastic net under the constraints that the weights
     sum to one and are all positive (softmax).
@@ -552,7 +582,7 @@ class ConstrainedElasticNet(_NN):
         return cost
 
 
-class SingleLayeredNeuralNetwork(_NN):
+class SingleLayeredNeuralNetwork(_NN, Osprey):
     """
     Neural net with a single hidden layer.
     Hyper-parameters are l1_reg, l2_reg, n_hidden
@@ -661,6 +691,27 @@ if __name__ == "__main__":
     np.random.seed(42)
     #m = ConstrainedElasticNet(learning_rate = 1e1, iterations = 100)
     m = SingleLayeredNeuralNetwork(learning_rate = 1e-1, n_hidden = 20, iterations = 10000)
+
+    print(m.learning_rate)
+    print(m.l1_reg)
+    print(m.n_hidden)
+    p = m.get_params()
+    print(p)
+    print(m.learning_rate)
+    print(m.l1_reg)
+    print(m.n_hidden)
+    m.set_params(learning_rate = 2, l1_reg = 5, n_hidden = 6)
+    print(m.learning_rate)
+    print(m.l1_reg)
+    print(m.n_hidden)
+    from sklearn.base import clone
+    m2 = clone(m)
+    print(m2.learning_rate)
+    print(m2.l1_reg)
+    print(m2.n_hidden)
+
+    quit()
+
     x = np.random.random((1000,50))
     a = np.random.random(50)
     a /= a.sum()
