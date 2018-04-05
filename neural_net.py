@@ -8,8 +8,8 @@ from utils import is_positive_or_zero, is_positive, is_positive_integer, \
 from inspect import signature
 from sklearn.utils.validation import check_X_y, check_array
 import matplotlib.pyplot as plt
-#from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error
-#import matplotlib.pyplot as plt
+import pickle
+from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error
 
 def is_positive(x):
     return (not is_array_like(x) and _is_numeric(x) and x > 0)
@@ -111,7 +111,7 @@ class Osprey(BaseEstimator):
 
         return self
 
-    def score(self, x, y):
+    def score(self, x, y = None):
         # Osprey maximises a score per default, so return minus mae/rmsd and plus r2
         if self.scoring_function == "r2":
             return self._score(x, y)
@@ -126,7 +126,7 @@ class _NN(object):
     """
 
     def __init__(self, learning_rate = 0.01, iterations = 500, l1_reg = 0.0, l2_reg = 0.0, 
-            scoring_function = 'rmsd', **kwargs):
+            scoring_function = 'rmse', early_stopping = True, **kwargs):
         """
         :param l1_reg: L1-regularisation parameter for the neural network weights
         :type l1_reg: float
@@ -139,12 +139,6 @@ class _NN(object):
         :param scoring_function: Scoring function to use. Available choices are 'mae', 'rmse', 'r2'.
         :type scoring_function: string
         """
-
-        # Catch unrecognised passed variables
-        if len(kwargs) > 0:
-            msg = "Warning: unrecognised input variable(s): "
-            msg += ", ".join([str(x for x in kwargs.keys())])
-            print(msg)
 
         self._set_l1_reg(l1_reg)
         self._set_l2_reg(l2_reg)
@@ -181,8 +175,8 @@ class _NN(object):
     def _set_scoring_function(self, scoring_function):
         if not is_string(scoring_function):
             raise InputError("Expected a string for variable 'scoring_function'. Got %s" % str(scoring_function))
-        if scoring_function.lower() not in ['mae', 'rmsd', 'r2']:
-            raise InputError("Available scoring functions are 'mae', 'rmsd', 'r2'. Got %s" % str(scoring_function))
+        if scoring_function.lower() not in ['mae', 'rmse', 'r2']:
+            raise InputError("Available scoring functions are 'mae', 'rmse', 'r2'. Got %s" % str(scoring_function))
 
         self.scoring_function = scoring_function
 
@@ -199,10 +193,10 @@ class _NN(object):
         reg_term = tf.zeros([])
 
         if isinstance(weights, list):
-            for i in len(weights):
+            for i in range(len(weights)):
                 reg_term += tf.reduce_sum(tf.square(weights[i]))
         else:
-            reg_term += tf.reduce_sum(tf.square(weights[i]))
+            reg_term += tf.reduce_sum(tf.square(weights))
 
         return self.l2_reg * reg_term
 
@@ -219,10 +213,10 @@ class _NN(object):
         reg_term = tf.zeros([])
 
         if isinstance(weights, list):
-            for i in len(weights):
+            for i in range(len(weights)):
                reg_term += tf.reduce_sum(tf.abs(weights[i]))
         else:
-            reg_term += tf.reduce_sum(tf.abs(weights[i]))
+            reg_term += tf.reduce_sum(tf.abs(weights))
 
         return self.l1_reg * reg_term
 
@@ -386,17 +380,27 @@ class _NN(object):
         # Initialisation of the variables
         init = tf.global_variables_initializer()
 
-        self.session = tf.Session()
+        # Uncomment to use all cpus
+        session_conf = tf.ConfigProto(
+                            intra_op_parallelism_threads=1,
+                            inter_op_parallelism_threads=1)
+        sess = tf.Session(config=session_conf)
+
+        self.session = tf.Session(config = session_conf)
 
         # Running the graph
         self.session.run(init)
 
+        last_cost = np.inf
         for i in range(self.iterations):
             feed_dict = {tf_x: x, tf_y: y}
             opt, avg_cost = self.session.run([optimizer, cost], feed_dict=feed_dict)
             self.training_cost.append(avg_cost)
             if i % 100 == 0:
-                print(i, avg_cost)
+                if (last_cost - avg_cost) < 1e-4:
+                    print("Stopped at iteration", i)
+                    break
+                last_cost = avg_cost
 
     def _cost(self, y_pred, tf_y, weights):
         """
@@ -689,27 +693,7 @@ class SingleLayeredNeuralNetwork(_NN, Osprey):
 if __name__ == "__main__":
     np.random.seed(42)
     #m = ConstrainedElasticNet(learning_rate = 1e1, iterations = 100)
-    m = SingleLayeredNeuralNetwork(learning_rate = 1e-1, n_hidden = 20, iterations = 10000)
-
-    print(m.learning_rate)
-    print(m.l1_reg)
-    print(m.n_hidden)
-    p = m.get_params()
-    print(p)
-    print(m.learning_rate)
-    print(m.l1_reg)
-    print(m.n_hidden)
-    m.set_params(learning_rate = 2, l1_reg = 5, n_hidden = 6)
-    print(m.learning_rate)
-    print(m.l1_reg)
-    print(m.n_hidden)
-    from sklearn.base import clone
-    m2 = clone(m)
-    print(m2.learning_rate)
-    print(m2.l1_reg)
-    print(m2.n_hidden)
-
-    quit()
+    m = SingleLayeredNeuralNetwork(learning_rate = 1e-1, n_hidden = 20, iterations = 10000, l2_reg = 1e-3)
 
     x = np.random.random((1000,50))
     a = np.random.random(50)
@@ -723,7 +707,7 @@ if __name__ == "__main__":
     plt.scatter(y[800:], y_pred)
     plt.show()
 
-    score = sum((y[800:]-y_pred)**2 / 1000)**0.5
+    score = m.score(x[800:], y[800:])
     print(score)
 
 
