@@ -396,11 +396,11 @@ class _NN(object):
             feed_dict = {tf_x: x, tf_y: y}
             opt, avg_cost = self.session.run([optimizer, cost], feed_dict=feed_dict)
             self.training_cost.append(avg_cost)
-            if i % 100 == 0:
-                if (last_cost - avg_cost) < 1e-4:
-                    print("Stopped at iteration", i)
-                    break
-                last_cost = avg_cost
+            #if i % 100 == 0:
+            #    if (last_cost - avg_cost) < 1e-4:
+            #        print("Stopped at iteration", i)
+            #        break
+            #    last_cost = avg_cost
 
     def _cost(self, y_pred, tf_y, weights):
         """
