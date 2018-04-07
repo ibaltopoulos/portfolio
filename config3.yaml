@@ -11,6 +11,7 @@ search_space:
     min: 1
     max: 300
     type: int
+    warp: log
 
   l1_reg:
     min: 1e-7

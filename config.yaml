@@ -1,8 +1,11 @@
 estimator:
   pickle: model.pkl
 
+
 strategy:
   name: gp
+  seeds: 10
+  acquisition: {'name': 'osprey', 'params': {}}
 
 search_space:
   n_hidden:
