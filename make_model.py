@@ -2,7 +2,7 @@ from neural_net import SingleLayeredNeuralNetwork
 import numpy as np
 import pickle
 
-m = SingleLayeredNeuralNetwork(learning_rate = 1e-1, n_hidden = 20, iterations = 5000)
+m = SingleLayeredNeuralNetwork(learning_rate = 1e-1, n_hidden = 20, iterations = 50)
 
 x = np.random.random((1000,50))
 a = np.random.random(50)
