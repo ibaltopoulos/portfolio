@@ -126,7 +126,7 @@ class _NN(object):
     """
 
     def __init__(self, learning_rate = 0.01, iterations = 500, l1_reg = 0.0, l2_reg = 0.0, 
-            scoring_function = 'rmse', early_stopping = True, **kwargs):
+            scoring_function = 'rmse', **kwargs):
         """
         :param l1_reg: L1-regularisation parameter for the neural network weights
         :type l1_reg: float
@@ -396,11 +396,11 @@ class _NN(object):
             feed_dict = {tf_x: x, tf_y: y}
             opt, avg_cost = self.session.run([optimizer, cost], feed_dict=feed_dict)
             self.training_cost.append(avg_cost)
-            if i % 100 == 0:
-                if (last_cost - avg_cost) < 1e-4:
-                    print("Stopped at iteration", i)
-                    break
-                last_cost = avg_cost
+            #if i % 100 == 0:
+            #    if (last_cost - avg_cost) < 1e-4:
+            #        print("Stopped at iteration", i)
+            #        break
+            #    last_cost = avg_cost
 
     def _cost(self, y_pred, tf_y, weights):
         """
@@ -691,9 +691,9 @@ class SingleLayeredNeuralNetwork(_NN, Osprey):
 
 
 if __name__ == "__main__":
-    np.random.seed(42)
+    #np.random.seed(42)
     #m = ConstrainedElasticNet(learning_rate = 1e1, iterations = 100)
-    m = SingleLayeredNeuralNetwork(learning_rate = 1e-1, n_hidden = 20, iterations = 10000, l2_reg = 1e-3)
+    m = SingleLayeredNeuralNetwork(learning_rate = 1e-1, n_hidden = 20, iterations = 5000, l2_reg = 1e-3)
 
     x = np.random.random((1000,50))
     a = np.random.random(50)
@@ -704,8 +704,8 @@ if __name__ == "__main__":
 
     y_pred = m.predict(x[800:])
 
-    plt.scatter(y[800:], y_pred)
-    plt.show()
+    #plt.scatter(y[800:], y_pred)
+    #plt.show()
 
     score = m.score(x[800:], y[800:])
     print(score)
