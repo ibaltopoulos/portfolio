@@ -56,13 +56,13 @@ if __name__ == "__main__":
 
     STRATEGY = "sobol"
     write_config()
-    SEEDS = 5
+    SEEDS = 10
     COUNTER += 1
     STRATEGY = "hyperopt_tpe"
     write_config()
 
     STRATEGY = "gp"
-    for ACQUISITION in ["osprey", "ei", "ucb"]:
+    for ACQUISITION in ["osprey", "ei", "ucb", "lars"]:
         for KAPPA in [None, "1", "2", "3"]:
             if ACQUISITION != "ucb" and KAPPA != None:
                 continue
@@ -71,9 +71,11 @@ if __name__ == "__main__":
             for NUM_ITER in ["1", "10", "100"]:
                 for NUM_INIT in ["1", "10", "100"]:
                     for SOBOL_INIT in ["True", "False"]:
-                        if SOBOL_INIT and NUM_ITER == "1":
+                        if SOBOL_INIT == "True" and NUM_ITER == "1":
                             continue
                         COUNTER += 1
+                        #if ACQUISITION == "ucb":
+                        #    print(KAPPA, COUNTER)
                         write_config()
 
 

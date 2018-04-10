@@ -7,9 +7,12 @@ from utils import is_positive_or_zero, is_positive, is_positive_integer, \
     is_string, InputError
 from inspect import signature
 from sklearn.utils.validation import check_X_y, check_array
+import sklearn.model_selection
 import matplotlib.pyplot as plt
 import pickle
 from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error
+import pandas as pd
+import sys
 
 def is_positive(x):
     return (not is_array_like(x) and _is_numeric(x) and x > 0)
@@ -126,7 +129,7 @@ class _NN(object):
     """
 
     def __init__(self, learning_rate = 0.01, iterations = 500, l1_reg = 0.0, l2_reg = 0.0, 
-            scoring_function = 'rmse', **kwargs):
+            scoring_function = 'rmse', optimiser = "Adam", **kwargs):
         """
         :param l1_reg: L1-regularisation parameter for the neural network weights
         :type l1_reg: float
@@ -145,6 +148,7 @@ class _NN(object):
         self._set_learning_rate(learning_rate)
         self._set_iterations(iterations)
         self._set_scoring_function(scoring_function)
+        self._set_optimiser(optimiser)
 
         # Placeholder variables
         self.n_features = None
@@ -179,6 +183,12 @@ class _NN(object):
             raise InputError("Available scoring functions are 'mae', 'rmse', 'r2'. Got %s" % str(scoring_function))
 
         self.scoring_function = scoring_function
+
+    def _set_optimiser(self, optimiser):
+        if not is_string(optimiser):
+            raise InputError("Expected a string for variable 'optimiser'. Got %s" % str(scoring_function))
+        if optimiser in ["GradientDescent", "Adadelta", "Adagrad", "Adam", "RMSProp"]:
+            self.optimiser = eval("tf.train.%sOptimizer" % optimiser)
 
     def _l2_loss(self, weights):
         """
@@ -236,8 +246,8 @@ class _NN(object):
 
         sns.set()
         df = pd.DataFrame()
-        df["Iterations"] = range(len(self.training_cost))
-        df["Training cost"] = self.training_cost
+        df["Iterations"] = range(len(self.training_cost))[5000:]
+        df["Training cost"] = self.training_cost[5000:]
         f = sns.lmplot('Iterations', 'Training cost', data=df, scatter_kws={"s": 20, "alpha": 0.6}, line_kws={"alpha": 0.5}, fit_reg=False)
         f.set(yscale = "log")
 
@@ -375,7 +385,7 @@ class _NN(object):
 
         cost = self._cost(y_pred, tf_y, weights)
 
-        optimizer = tf.train.GradientDescentOptimizer(learning_rate=self.learning_rate).minimize(cost)
+        optimizer = self.optimiser(learning_rate=self.learning_rate).minimize(cost)
 
         # Initialisation of the variables
         init = tf.global_variables_initializer()
@@ -689,11 +699,110 @@ class SingleLayeredNeuralNetwork(_NN, Osprey):
 
         return cost
 
+class SingleMethod(object):
+    """
+    Selects the single best method.
+    """
+
+    def __init__(self, metric = "rmsd"):
+        self._set_metric(metric)
+        self.idx = None
+
+    def _set_metric(self, metric):
+        if metric in ["rmsd", "mae", "max"]:
+            self.metric = metric
+
+    def fit(self, x, y):
+        """
+        Choose the single best method.
+        """
+
+        if self.metric == "mae":
+            acc = np.mean(abs(x - y[:,None]), axis=0)
+        elif self.metric == "rmsd":
+            acc = np.sqrt(np.mean((x - y[:,None])**2, axis=0))
+        elif self.metric == "max":
+            acc = np.max(abs(x - y[:,None]), axis=0)
+
+        self.idx = np.argmin(acc)
+
+    def predict(self, x):
+        return x[:, self.idx]
+
+def run_SingleMethod(x,y):
+    m = SingleMethod(metric = "rmsd")
+    score = outer_cv(x, y, m)
+    print("SingleMethod score:", score)
+
+def run_ConstrainedElasticNet(x,y):
+    m = ConstrainedElasticNet(learning_rate = 0.1, iterations = 5000, optimiser = opt)
+    score = outer_cv(x, y, m)
+    print("ConstrainedElasticNet score:", score)
+
+
+def reaction_dataframe_to_energies(df):
+    # just to make sure that stuff is sorted
+    # supress warning as this works like intended
+    pd.options.mode.chained_assignment = None
+    df.sort_values(['functional', 'basis', 'unrestricted', 'reaction'])
+    pd.options.mode.chained_assignment = "warn"
+
+    unique_reactions = df.reaction.unique()
+
+    energies = []
+    errors = []
+    for idx, reac in enumerate(unique_reactions):
+        sub_df = df.loc[df.reaction == reac]
+        energies.append(sub_df.energy.tolist())
+        errors.append(sub_df.error.tolist())
+
+    energies = np.asarray(energies, dtype = float)
+    errors = np.asarray(errors, dtype = float)
+
+    return energies, (energies - errors)[:,0]
+
+def outer_cv(x, y, m):
+    """
+    Do outer cross validation to get the prediction errors of a method. 
+    kwargs are a dictionary with options to the Portfolio class.
+    """
+
+    cv_generator = sklearn.model_selection.RepeatedKFold(n_splits = 5, n_repeats = 3)
+
+    errors = []
+    for train_idx, test_idx in cv_generator.split(y):
+        train_x, train_y = x[train_idx], y[train_idx]
+        test_x, test_y = x[test_idx], y[test_idx]
+
+        tf.reset_default_graph()
+        m.fit(train_x, train_y)
+        pred_y = m.predict(test_x)
+        errors.extend(pred_y - test_y)
+
+    errors = np.asarray(errors)
+
+    return np.sqrt(np.sum(errors**2)/errors.size)
 
 if __name__ == "__main__":
-    #np.random.seed(42)
-    #m = ConstrainedElasticNet(learning_rate = 1e1, iterations = 100)
-    m = SingleLayeredNeuralNetwork(learning_rate = 1e-1, n_hidden = 20, iterations = 5000, l2_reg = 1e-3)
+    np.random.seed(42)
+    df = pd.read_pickle(sys.argv[1])
+    x, y = reaction_dataframe_to_energies(df)
+
+    method_dict = {"Adam": [0.7, 0.5, 0.3, 0.1, 0.07, 0.05, 0.03, 0.01, 0.007],
+                   }
+    method_dict = {"Adam": [0.3, 0.1, 0.07, 0.05, 0.03, 0.01, 0.007],
+                   }
+
+
+
+    for opt, lrs in method_dict.items():
+        for lr in lrs:
+            m = ConstrainedElasticNet(learning_rate = lr, iterations = 5000, optimiser = opt)
+            score = outer_cv(x, y, m)
+            print(score, lr, opt)
+    quit()
+
+    #m = SingleLayeredNeuralNetwork(learning_rate = 1e-1, n_hidden = 20, iterations = 5000, l2_reg = 1e-3)
 
     x = np.random.random((1000,50))
     a = np.random.random(50)

@@ -2,9 +2,8 @@
 # 1,2: CH3 dissociation
 # 1,3: CH3O dissociation
 # 1,4: OH dissociation
-# Below reaction listed twice since it's both CH3 and CH3O dissociation
-C2H6O, CH3O CH3, 1, 2
-C2H6O, CH3O CH3, 1, 3
+# 1.5: CH3 and CH3O dissociation
+C2H6O, CH3O CH3, 1, 5
 Et-H, CH3 CH3, 1, 2
 Et-H, Et H, 1, 1
 C4H10O, CH3O iPr, 1, 3
