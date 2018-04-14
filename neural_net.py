@@ -246,8 +246,8 @@ class _NN(object):
 
         sns.set()
         df = pd.DataFrame()
-        df["Iterations"] = range(len(self.training_cost))[5000:]
-        df["Training cost"] = self.training_cost[5000:]
+        df["Iterations"] = range(len(self.training_cost))
+        df["Training cost"] = self.training_cost
         f = sns.lmplot('Iterations', 'Training cost', data=df, scatter_kws={"s": 20, "alpha": 0.6}, line_kws={"alpha": 0.5}, fit_reg=False)
         f.set(yscale = "log")
 
@@ -394,7 +394,6 @@ class _NN(object):
         session_conf = tf.ConfigProto(
                             intra_op_parallelism_threads=1,
                             inter_op_parallelism_threads=1)
-        sess = tf.Session(config=session_conf)
 
         self.session = tf.Session(config = session_conf)
 
@@ -406,11 +405,18 @@ class _NN(object):
             feed_dict = {tf_x: x, tf_y: y}
             opt, avg_cost = self.session.run([optimizer, cost], feed_dict=feed_dict)
             self.training_cost.append(avg_cost)
-            #if i % 100 == 0:
-            #    if (last_cost - avg_cost) < 1e-4:
-            #        print("Stopped at iteration", i)
-            #        break
-            #    last_cost = avg_cost
+
+        # Store the final portfolio weights
+        self._set_portfolio(weights)
+
+    def _set_portfolio(self):
+        """
+        To be overwritten by child methods.
+        Overwrites the self.portfolio variable.
+
+        """
+
+        raise NotImplementedError("self._set_portfolio should be overwritten by child methods")
 
     def _cost(self, y_pred, tf_y, weights):
         """
@@ -594,6 +600,11 @@ class ConstrainedElasticNet(_NN, Osprey):
 
         return cost
 
+    def _set_portfolio(self, weights):
+        h = tf.nn.softmax(weights, dim = 0)
+
+        self.portfolio = h.eval(session = self.session).flatten()
+
 
 class SingleLayeredNeuralNetwork(_NN, Osprey):
     """
@@ -699,6 +710,9 @@ class SingleLayeredNeuralNetwork(_NN, Osprey):
 
         return cost
 
+    def _set_portfolio(self, weights):
+        self.portfolio = weights[-1].eval(session = self.session).flatten()
+
 class SingleMethod(object):
     """
     Selects the single best method.
@@ -707,6 +721,7 @@ class SingleMethod(object):
     def __init__(self, metric = "rmsd"):
         self._set_metric(metric)
         self.idx = None
+        self.portfolio = None
 
     def _set_metric(self, metric):
         if metric in ["rmsd", "mae", "max"]:
@@ -725,17 +740,26 @@ class SingleMethod(object):
             acc = np.max(abs(x - y[:,None]), axis=0)
 
         self.idx = np.argmin(acc)
+        self._set_portfolio()
+
+    def _set_portfolio(self):
+        self.portfolio = np.zeros(x.shape[1])
+        self.portfolio[self.idx] = 1
 
     def predict(self, x):
         return x[:, self.idx]
 
-def run_SingleMethod(x,y):
+def run_SingleMethod(x,y, seed = None):
+    if seed != None:
+        np.random.seed(seed)
     m = SingleMethod(metric = "rmsd")
     score = outer_cv(x, y, m)
     print("SingleMethod score:", score)
 
-def run_ConstrainedElasticNet(x,y):
-    m = ConstrainedElasticNet(learning_rate = 0.1, iterations = 5000, optimiser = opt)
+def run_ConstrainedElasticNet(x,y, seed = None):
+    if seed != None:
+        np.random.seed(seed)
+    m = ConstrainedElasticNet(learning_rate = 0.3, iterations = 5000)
     score = outer_cv(x, y, m)
     print("ConstrainedElasticNet score:", score)
 
@@ -780,43 +804,17 @@ def outer_cv(x, y, m):
         errors.extend(pred_y - test_y)
 
     errors = np.asarray(errors)
-
     return np.sqrt(np.sum(errors**2)/errors.size)
 
 if __name__ == "__main__":
-    np.random.seed(42)
     df = pd.read_pickle(sys.argv[1])
     x, y = reaction_dataframe_to_energies(df)
 
-    method_dict = {"Adam": [0.7, 0.5, 0.3, 0.1, 0.07, 0.05, 0.03, 0.01, 0.007],
-                   }
-    method_dict = {"Adam": [0.3, 0.1, 0.07, 0.05, 0.03, 0.01, 0.007],
-                   }
+    run_SingleMethod(x,y, 42)
+    run_ConstrainedElasticNet(x,y, 42)
 
-
-
-    for opt, lrs in method_dict.items():
-        for lr in lrs:
-            m = ConstrainedElasticNet(learning_rate = lr, iterations = 5000, optimiser = opt)
-            score = outer_cv(x, y, m)
-            print(score, lr, opt)
-    quit()
 
     #m = SingleLayeredNeuralNetwork(learning_rate = 1e-1, n_hidden = 20, iterations = 5000, l2_reg = 1e-3)
 
-    x = np.random.random((1000,50))
-    a = np.random.random(50)
-    a /= a.sum()
-    y = np.sum(x * a, 1)
-
-    m.fit(x[:800],y[:800])
-
-    y_pred = m.predict(x[800:])
-
-    #plt.scatter(y[800:], y_pred)
-    #plt.show()
-
-    score = m.score(x[800:], y[800:])
-    print(score)
 
 
