@@ -38,7 +38,7 @@ def write_config():
     #    d["search_space"]["n_hidden"] = {"min": "1", "max": "300", "type": "int", "warp": "log"}
 
     d["random_seed"] = "42"
-    d["cv"] = {"name": "kfold", "params": {"n_splits": "3", "shuffle": "True"}}
+    d["cv"] = {"name": "kfold", "params": {"n_splits": "9", "shuffle": "False"}}
     d["dataset_loader"] = {"name": "joblib", "params": {"filenames": "data.pkl", "x_name": "x", "y_name": "y"}}
     d["trials"] = {"uri": "sqlite:///trials_%d.db" % COUNTER}
 
@@ -57,7 +57,7 @@ if __name__ == "__main__":
 
     STRATEGY = "sobol"
     write_config()
-    SEEDS = 10
+    SEEDS = 5
     COUNTER += 1
     STRATEGY = "hyperopt_tpe"
     write_config()

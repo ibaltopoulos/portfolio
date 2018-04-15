@@ -2,9 +2,9 @@ from neural_net import ConstrainedElasticNet, reaction_dataframe_to_energies
 import numpy as np
 import pickle
 import sys
-import pandas
+import pandas as pd
 
-m = ConstrainedElasticNet()
+m = ConstrainedElasticNet(iterations = 10000)
 
 df = pd.read_pickle(sys.argv[1])
 x, y = reaction_dataframe_to_energies(df)

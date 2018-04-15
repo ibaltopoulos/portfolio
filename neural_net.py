@@ -185,10 +185,16 @@ class _NN(object):
         self.scoring_function = scoring_function
 
     def _set_optimiser(self, optimiser):
-        if not is_string(optimiser):
-            raise InputError("Expected a string for variable 'optimiser'. Got %s" % str(scoring_function))
-        if optimiser in ["GradientDescent", "Adadelta", "Adagrad", "Adam", "RMSProp"]:
-            self.optimiser = eval("tf.train.%sOptimizer" % optimiser)
+        try:
+            optimiser = optimiser().get_name()
+        except:
+            pass
+
+        if is_string(optimiser):
+            if optimiser in ["GradientDescent", "Adadelta", "Adagrad", "Adam", "RMSProp"]:
+                self.optimiser = eval("tf.train.%sOptimizer" % optimiser)
+        else:
+            raise InputError("Expected a string or tensorflow.optimiser object for variable 'optimiser'. Got %s" % str(optimiser))
 
     def _l2_loss(self, weights):
         """
@@ -362,6 +368,8 @@ class _NN(object):
         :type y: array of size (n_samples, )
 
         """
+        # Clears the current graph
+        tf.reset_default_graph()
 
         # Check that X and y have correct shape
         x, y = check_X_y(x, y, multi_output = False, y_numeric = True, warn_on_dtype = True)
@@ -804,7 +812,6 @@ def outer_cv(x, y, m):
         train_x, train_y = x[train_idx], y[train_idx]
         test_x, test_y = x[test_idx], y[test_idx]
 
-        tf.reset_default_graph()
         m.fit(train_x, train_y)
         pred_y = m.predict(test_x)
         errors.extend(pred_y - test_y)
