@@ -756,13 +756,19 @@ def run_SingleMethod(x,y, seed = None):
     score = outer_cv(x, y, m)
     print("SingleMethod score:", score)
 
-def run_ConstrainedElasticNet(x,y, seed = None):
+def run_ConstrainedElasticNet(x,y, seed = None, iterations = 5000, learning_rate = 0.3):
     if seed != None:
         np.random.seed(seed)
-    m = ConstrainedElasticNet(learning_rate = 0.3, iterations = 5000)
+    m = ConstrainedElasticNet(learning_rate = learning_rate, iterations = iterations)
     score = outer_cv(x, y, m)
     print("ConstrainedElasticNet score:", score)
 
+def run_SingleLayeredNeuralNetwork(x,y, seed = None, iterations = 5000, learning_rate = 0.3):
+    if seed != None:
+        np.random.seed(seed)
+    m = SingleLayeredNeuralNetwork(learning_rate = learning_rate, iterations = iterations)
+    score = outer_cv(x, y, m)
+    print("SingleLayeredNeuralNetwork score:", score)
 
 def reaction_dataframe_to_energies(df):
     # just to make sure that stuff is sorted
@@ -808,10 +814,14 @@ def outer_cv(x, y, m):
 
 if __name__ == "__main__":
     df = pd.read_pickle(sys.argv[1])
+    df = df.loc[(df.basis == "SV-P") | (df.basis == "sto-3g") | (df.basis == "svp")]
     x, y = reaction_dataframe_to_energies(df)
 
     run_SingleMethod(x,y, 42)
+    # Might still be sensitive to number of iterations and learning rate
     run_ConstrainedElasticNet(x,y, 42)
+    # Now many more hyper parameters are relevant
+    #run_SingleLayeredNeuralNetwork(x,y, 42)
 
 
     #m = SingleLayeredNeuralNetwork(learning_rate = 1e-1, n_hidden = 20, iterations = 5000, l2_reg = 1e-3)
