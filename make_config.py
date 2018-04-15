@@ -28,16 +28,17 @@ def write_config():
 
 
     d["search_space"] = {
-        "l1_reg": {"min": "1e-7", "max": "1e-1", "type": "float", "warp": "log"},
-        "l2_reg": {"min": "1e-7", "max": "1e-1", "type": "float", "warp": "log"},
-        "learning_rate": {"min": "1e-4", "max": "1e1", "type": "float", "warp": "log"}
+        "l2_reg": {"min": "1e-7", "max": "1e1", "type": "float", "warp": "log"},
+        "learning_rate": {"min": "1e-3", "max": "1e1", "type": "float", "warp": "log"},
+        "iterations": {"min": "50", "max": "10000", "type": "int", "warp": "log"},
         }
-    if STRATEGY == "hyperopt_tpe":
-        d["search_space"]["n_hidden"] = {"min": "1", "max": "300", "type": "int"}
-    else:
-        d["search_space"]["n_hidden"] = {"min": "1", "max": "300", "type": "int", "warp": "log"}
+    #if STRATEGY == "hyperopt_tpe":
+    #    d["search_space"]["n_hidden"] = {"min": "1", "max": "300", "type": "int"}
+    #else:
+    #    d["search_space"]["n_hidden"] = {"min": "1", "max": "300", "type": "int", "warp": "log"}
 
-    d["cv"] = {"name": "kfold", "params": {"n_splits": "3", "shuffle": "False"}}
+    d["random_seed"] = "42"
+    d["cv"] = {"name": "kfold", "params": {"n_splits": "3", "shuffle": "True"}}
     d["dataset_loader"] = {"name": "joblib", "params": {"filenames": "data.pkl", "x_name": "x", "y_name": "y"}}
     d["trials"] = {"uri": "sqlite:///trials_%d.db" % COUNTER}
 
