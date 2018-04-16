@@ -57,7 +57,7 @@ if __name__ == "__main__":
 
     STRATEGY = "sobol"
     write_config()
-    SEEDS = 5
+    SEEDS = 15
     COUNTER += 1
     STRATEGY = "hyperopt_tpe"
     write_config()
