@@ -13,6 +13,7 @@ import warnings
 from sklearn.exceptions import ConvergenceWarning
 import seaborn as sns
 from matplotlib import rc
+from inspect import signature
 
 
 #def multivariate_normal_logpdf(x, mu, cov):
