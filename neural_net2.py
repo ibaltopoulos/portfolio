@@ -207,8 +207,9 @@ class NN(BaseModel, Osprey):
     """
 
     def __init__(self, learning_rate = 0.01, iterations = 500, l1_reg = 0.0, l2_reg = 0.0, 
-            scoring_function = 'rmse', optimiser = "Adam", softmax = True, fit_bias = True
-            nhl, hl1, hl2, hl3, **kwargs):
+            scoring_function = 'rmse', optimiser = "Adam", softmax = True, fit_bias = False.
+            nhl = 0, hl1 = 5, hl2 = 5, hl3 = 5, multiply_main_features = True, activation_function = "sigmoid",
+            bias_input = False, n_main_features = -1, **kwargs):
         """
         :param l1_reg: L1-regularisation parameter for the neural network weights
         :type l1_reg: float
@@ -226,7 +227,7 @@ class NN(BaseModel, Osprey):
         """
 
         # Initialise parents
-        super(NN, self).__init__(**kwargs)
+        super(self.__class__.__base__, self).__init__(**kwargs)
         self._set_l1_reg(l1_reg)
         self._set_l2_reg(l2_reg)
         self._set_learning_rate(learning_rate)
@@ -234,6 +235,11 @@ class NN(BaseModel, Osprey):
         self._set_scoring_function(scoring_function)
         self._set_optimiser(optimiser)
         self._set_softmax(softmax)
+        self._set_fit_bias(fit_bias)
+        self._set_multiply_main_features(multiply_main_features)
+        self._set_activation_function(activation_function)
+        self._set_bias_input(bias_input)
+        self._set_n_main_features(n_main_features)
         self._set_hidden_layers(nhl, hl1, hl2, hl3)
 
         # Placeholder variables
@@ -256,12 +262,57 @@ class NN(BaseModel, Osprey):
         else:
             raise InputError("Expected variable 'nhl' to be integer and between 0 and 3. Got %s" % str(nhl))
 
-
     def _set_softmax(self, softmax):
         if softmax in [True, False]:
             self.softmax = softmax
         else:
             raise InputError("Expected variable 'softmax' to be boolean. Got %s" % str(softmax))
+
+    def _set_fit_bias(self, fit_bias):
+        if fit_bias in [True, False]:
+            self.fit_bias = fit_bias
+        else:
+            raise InputError("Expected variable 'fit_bias' to be boolean. Got %s" % str(fit_bias))
+
+    def _set_multiply_main_features(self, multiply_main_features):
+        if multiply_main_features in [True, False]:
+            self.multiply_main_features = multiply_main_features
+        else:
+            raise InputError("Expected variable 'multiply_main_features' to be boolean. Got %s" % str(multiply_main_features))
+
+    def _set_activation_function(self, activation_function):
+        if activation_function in ['sigmoid', tf.nn.sigmoid]:
+            self.activation_function = tf.nn.sigmoid
+        elif activation_function in ['tanh', tf.nn.tanh]:
+            self.activation_function = tf.nn.tanh
+        elif activation_function in ['elu', tf.nn.elu]:
+            self.activation_function = tf.nn.elu
+        elif activation_function in ['softplus', tf.nn.softplus]:
+            self.activation_function = tf.nn.softplus
+        elif activation_function in ['softsign', tf.nn.softsign]:
+            self.activation_function = tf.nn.softsign
+        elif activation_function in ['relu', tf.nn.relu]:
+            self.activation_function = tf.nn.relu
+        elif activation_function in ['relu6', tf.nn.relu6]:
+            self.activation_function = tf.nn.relu6
+        elif activation_function in ['crelu', tf.nn.crelu]:
+            self.activation_function = tf.nn.crelu
+        elif activation_function in ['relu_x', tf.nn.relu_x]:
+            self.activation_function = tf.nn.relu_x
+        else:
+            raise InputError("Unknown activation function. Got %s" % str(activation_function))
+
+    def _set_bias_input(self, bias_input):
+        if bias_input in [True, False]:
+            self.bias_input = bias_input
+        else:
+            raise InputError("Expected variable 'bias_input' to be boolean. Got %s" % str(bias_input))
+
+    def _set_n_main_features(self, n_main_features):
+        if is_positive_integer(n_main_features):
+            self.n_main_features = n_main_features
+        else:
+            raise InputError("Expected variable 'n_main_features' to be positive integer. Got %s" % str(n_main_features))
 
     def _set_l1_reg(self, l1_reg):
         if not is_positive_or_zero(l1_reg):
@@ -478,14 +529,46 @@ class NN(BaseModel, Osprey):
 
         raise NotImplementedError("self._cost should be overwritten by child methods")
 
-    def _model(self, x, weights):
+    def _model(self, x, weights, biases = None):
         """
-        To be overwritten by child methods.
-        Takes input tensor and weights and returns the model.
+        Constructs the actual network.
 
+        :param x: Input
+        :type x: tf.placeholder of shape (None, n_features)
+        :param weights: Weights used in the network.
+        :type weights: tf.Variable of shape (n_features, 1)
+        :param biases: Dummy variable
+        :type weights: NoneType
+        :return: Output
+        :rtype: tf.Variable of size (None, n_targets)
         """
 
-        raise NotImplementedError("self._model should be overwritten by child methods")
+        # TODO make slices work
+        # Make the biases input
+        if self.input_bias:
+            b = tf.matmul(x[:,:self.n_main_features], weights[0])
+            inp = tf.subtract(x,b)
+        else:
+            inp = x
+
+
+
+
+
+#        # Softmax activation function
+#        h = tf.nn.softmax(weights, dim = 0)
+#        # Add up contributions (name must be 'y')
+#        z = tf.matmul(x, h, name = 'y')
+#
+#        return z
+#        # get activations of hidden layer
+#        z = tf.add(tf.matmul(x, weights[0]), biases[0])
+#        h = self.activation_function(z)
+#
+#        # Add up contributions (name must be 'y')
+#        z = tf.add(tf.matmul(h, weights[1]), biases[1], name = 'y')
+#
+#        return z
 
     def _generate_weights(self):
         """
@@ -497,37 +580,51 @@ class NN(BaseModel, Osprey):
         """
 
         weights = []
-        # Add hidden layers if exists
-        for i in range(self.nhl):
+        biases = []
 
-        weights.append(self._init_weight(self.n_features, 1))
-#
-#        return weights, None
+        # Add a layer that basically calculates a weighted mean.
+        # Since some of the methods might be very bad, 
+        # this makes more sense than just using the mean
+        if self.bias_input:
+            weights.append(self._init_weights(self.n_main_features, 1, equal = True))
 
-#        """
-#        Generates the weights.
-#
-#        :return: tuple of weights and biases
-#        :rtype: tuple
-#        """
-#
-#        weights, biases = [], []
-#
-#        weights.append(self._init_weight(self.n_features, self.n_hidden))
-#        weights.append(self._init_weight(self.n_hidden, 1))
-#
-#        biases.append(self._init_bias(self.n_hidden))
-#        biases.append(self._init_bias(1))
-#
-#        return weights, biases
+        # Make the remaining weights in the network
+        if self.nhl == 0:
+            weights.append(self._init_weights(self.n_features, 1))
+        else:
+            if self.nhl >= 1:
+                weights.append(self._init_weights(self.n_features, self.hl1))
+                biases.append(self.hl1)
+            if self.nhl >= 2:
+                weights.append(self._init_weights(self.hl1, self.hl2))
+                biases.append(self.hl2)
+            if self.nhl >= 3:
+                weights.append(self._init_weights(self.hl2, self.hl3))
+                biases.append(self.hl3)
 
-    def _init_weight(self, n1, n2):
+            if self.multiply_main_features:
+                weights.append(self._init_weights(weights[-1].shape[1],self.n_main_features))
+                biases.append(self.n_main_features)
+            else:
+                weights.append(self._init_weights(weights[-1].shape[1],1))
+
+
+        if self.fit_bias:
+            biases.append(self._init_bias(1))
+
+        return weights, biases
+
+
+    def _init_weight(self, n1, n2, equal = False):
         """
         Generate a tensor of weights of size (n1, n2)
 
         """
 
-        w = tf.Variable(tf.truncated_normal([n1,n2], stddev = 1.0 / np.sqrt(n2)))
+        if equal:
+            w = tf.Variable(np.ones((n1,n2), dtype=np.float32) / (n1 * n2))
+        else:
+            w = tf.Variable(tf.truncated_normal([n1,n2], stddev = 1.0 / np.sqrt(n2)))
 
         return w
 
@@ -695,27 +792,6 @@ class NN(BaseModel, Osprey):
 #        self.n_hidden = n_hidden
 #        self._set_activation_function(activation_function)
 #
-#    def _set_activation_function(self, activation_function):
-#        if activation_function in ['sigmoid', tf.nn.sigmoid]:
-#            self.activation_function = tf.nn.sigmoid
-#        elif activation_function in ['tanh', tf.nn.tanh]:
-#            self.activation_function = tf.nn.tanh
-#        elif activation_function in ['elu', tf.nn.elu]:
-#            self.activation_function = tf.nn.elu
-#        elif activation_function in ['softplus', tf.nn.softplus]:
-#            self.activation_function = tf.nn.softplus
-#        elif activation_function in ['softsign', tf.nn.softsign]:
-#            self.activation_function = tf.nn.softsign
-#        elif activation_function in ['relu', tf.nn.relu]:
-#            self.activation_function = tf.nn.relu
-#        elif activation_function in ['relu6', tf.nn.relu6]:
-#            self.activation_function = tf.nn.relu6
-#        elif activation_function in ['crelu', tf.nn.crelu]:
-#            self.activation_function = tf.nn.crelu
-#        elif activation_function in ['relu_x', tf.nn.relu_x]:
-#            self.activation_function = tf.nn.relu_x
-#        else:
-#            raise InputError("Unknown activation function. Got %s" % str(activation_function))
 #
 #    def _generate_weights(self):
 #        """
