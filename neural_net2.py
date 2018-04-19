@@ -543,14 +543,52 @@ class NN(BaseModel, Osprey):
         :rtype: tf.Variable of size (None, n_targets)
         """
 
-        # TODO make slices work
+        # indices to keep track of the weights and biases
+        # since the various options obscures this
+        w_idx, b_idx = 0, 0
+
         # Make the biases input
         if self.input_bias:
-            b = tf.matmul(x[:,:self.n_main_features], weights[0])
-            inp = tf.subtract(x,b)
+            # split up x in parts that will be biased and one that will not
+            x1 = x[:,:self.n_main_features]
+            x2 = x[:,self.n_main_features:]
+            # get the bias
+            b = tf.matmul(x1, weights[w_idx])
+            w_idx += 1
+            # subtract the bias from the main features
+            x1b = x1 - b
+            # concatenate the two parts of x
+            inp = tf.concat([x1b, x2], axis = 1)
         else:
             inp = x
 
+        if self.nhl == 0:
+            if self.multiply_main_features:
+                z = tf.matmul(inp, weights[w_idx]) + biases[b_idx]
+                weights.append(self._init_weights(self.n_features,self.n_main_features))
+                biases.append(self.n_main_features)
+            else:
+                weights.append(self._init_weights(self.n_features, 1))
+#        else:
+#            if self.nhl >= 1:
+#                weights.append(self._init_weights(self.n_features, self.hl1))
+#                biases.append(self.hl1)
+#            if self.nhl >= 2:
+#                weights.append(self._init_weights(self.hl1, self.hl2))
+#                biases.append(self.hl2)
+#            if self.nhl >= 3:
+#                weights.append(self._init_weights(self.hl2, self.hl3))
+#                biases.append(self.hl3)
+#
+#            if self.multiply_main_features:
+#                weights.append(self._init_weights(weights[-1].shape[1],self.n_main_features))
+#                biases.append(self.n_main_features)
+#            else:
+#                weights.append(self._init_weights(weights[-1].shape[1],1))
+#
+#
+#        if self.fit_bias:
+#            biases.append(self._init_bias(1))
 
 
 
@@ -590,7 +628,11 @@ class NN(BaseModel, Osprey):
 
         # Make the remaining weights in the network
         if self.nhl == 0:
-            weights.append(self._init_weights(self.n_features, 1))
+            if self.multiply_main_features:
+                weights.append(self._init_weights(self.n_features,self.n_main_features))
+                biases.append(self.n_main_features)
+            else:
+                weights.append(self._init_weights(self.n_features, 1))
         else:
             if self.nhl >= 1:
                 weights.append(self._init_weights(self.n_features, self.hl1))
@@ -613,7 +655,6 @@ class NN(BaseModel, Osprey):
             biases.append(self._init_bias(1))
 
         return weights, biases
-
 
     def _init_weight(self, n1, n2, equal = False):
         """
