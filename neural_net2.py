@@ -206,9 +206,9 @@ class NN(BaseModel, Osprey):
 
     """
 
-    def __init__(self, learning_rate = 0.01, iterations = 500, l1_reg = 0.0, l2_reg = 0.0, 
-            scoring_function = 'rmse', optimiser = "Adam", softmax = True, fit_bias = False.
-            nhl = 0, hl1 = 5, hl2 = 5, hl3 = 5, multiply_main_features = True, activation_function = "sigmoid",
+    def __init__(self, learning_rate = 0.3, iterations = 5000, l1_reg = 0.0, l2_reg = 0.0, 
+            scoring_function = 'rmse', optimiser = "Adam", softmax = True, fit_bias = False,
+            nhl = 0, hl1 = 5, hl2 = 5, hl3 = 5, multiplication_layer = False, activation_function = "sigmoid",
             bias_input = False, n_main_features = -1, **kwargs):
         """
         :param l1_reg: L1-regularisation parameter for the neural network weights
@@ -236,18 +236,30 @@ class NN(BaseModel, Osprey):
         self._set_optimiser(optimiser)
         self._set_softmax(softmax)
         self._set_fit_bias(fit_bias)
-        self._set_multiply_main_features(multiply_main_features)
+        self._set_multiplication_layer(multiplication_layer)
         self._set_activation_function(activation_function)
         self._set_bias_input(bias_input)
         self._set_n_main_features(n_main_features)
         self._set_hidden_layers(nhl, hl1, hl2, hl3)
 
+        self._validate_options()
+
         # Placeholder variables
         self.training_cost = []
         self.session = None
 
+    def _validate_options(self):
+        """
+        Checks if there are invalid combinations of options
+        """
+
+        if self.softmax and not self.multiplication_layer:
+            if self.n_main_features != -1 or self.nhl != 0:
+                raise InputError("multiplication_layer can't be False if softmax is True, \
+                        unless nhl is 0 and n_features equals n_main_features")
+
     def _set_hidden_layers(self, nhl, hl1, hl2, hl3):
-        if is_integer(nhl) and nhl >= 0 and nhl <= 3:
+        if is_positive_integer_or_zero(nhl) and nhl <= 3:
             self.nhl = nhl
         else:
             raise InputError("Expected variable 'nhl' to be integer and between 0 and 3. Got %s" % str(nhl))
@@ -274,11 +286,11 @@ class NN(BaseModel, Osprey):
         else:
             raise InputError("Expected variable 'fit_bias' to be boolean. Got %s" % str(fit_bias))
 
-    def _set_multiply_main_features(self, multiply_main_features):
-        if multiply_main_features in [True, False]:
-            self.multiply_main_features = multiply_main_features
+    def _set_multiplication_layer(self, multiplication_layer):
+        if multiplication_layer in [True, False]:
+            self.multiplication_layer = multiplication_layer
         else:
-            raise InputError("Expected variable 'multiply_main_features' to be boolean. Got %s" % str(multiply_main_features))
+            raise InputError("Expected variable 'multiplication_layer' to be boolean. Got %s" % str(multiplication_layer))
 
     def _set_activation_function(self, activation_function):
         if activation_function in ['sigmoid', tf.nn.sigmoid]:
@@ -309,7 +321,7 @@ class NN(BaseModel, Osprey):
             raise InputError("Expected variable 'bias_input' to be boolean. Got %s" % str(bias_input))
 
     def _set_n_main_features(self, n_main_features):
-        if is_positive_integer(n_main_features):
+        if is_positive_integer(n_main_features) or n_main_features == -1:
             self.n_main_features = n_main_features
         else:
             raise InputError("Expected variable 'n_main_features' to be positive integer. Got %s" % str(n_main_features))
@@ -345,7 +357,7 @@ class NN(BaseModel, Osprey):
     def _set_optimiser(self, optimiser):
         try:
             optimiser = optimiser().get_name()
-        except AttributeError:
+        except TypeError:
             pass
 
         if is_string(optimiser):
@@ -468,6 +480,10 @@ class NN(BaseModel, Osprey):
         # Clears the current graph
         tf.reset_default_graph()
 
+        # set n_main_features if previously set to -1
+        if self.n_main_features == -1:
+            self.n_main_features = x.shape[1]
+
         # Check that X and y have correct shape
         x, y = check_X_y(x, y, multi_output = False, y_numeric = True, warn_on_dtype = True)
 
@@ -512,22 +528,10 @@ class NN(BaseModel, Osprey):
             self.training_cost.append(avg_cost)
 
         # Store the final portfolio weights
-        self._set_portfolio(weights)
+        self._set_portfolio()
 
-    def _set_portfolio(self, weights):
-        if self.softmax:
-            h = tf.nn.softmax(weights, dim = 0)
-
-        self.portfolio = h.eval(session = self.session).flatten()
-
-    def _cost(self, y_pred, tf_y, weights):
-        """
-        To be overwritten by child methods.
-        Takes the model tensor, target tensor and the weights.
-
-        """
-
-        raise NotImplementedError("self._cost should be overwritten by child methods")
+    def _set_portfolio(self):
+        self.portfolio = self.portfolio_weights.eval(session = self.session).flatten()
 
     def _model(self, x, weights, biases = None):
         """
@@ -547,11 +551,12 @@ class NN(BaseModel, Osprey):
         # since the various options obscures this
         w_idx, b_idx = 0, 0
 
+        # split up x in main and secondary parts
+        x1 = x[:,:self.n_main_features]
+        x2 = x[:,self.n_main_features:]
+
         # Make the biases input
-        if self.input_bias:
-            # split up x in parts that will be biased and one that will not
-            x1 = x[:,:self.n_main_features]
-            x2 = x[:,self.n_main_features:]
+        if self.bias_input:
             # get the bias
             b = tf.matmul(x1, weights[w_idx])
             w_idx += 1
@@ -563,50 +568,56 @@ class NN(BaseModel, Osprey):
             inp = x
 
         if self.nhl == 0:
-            if self.multiply_main_features:
-                z = tf.matmul(inp, weights[w_idx]) + biases[b_idx]
-                weights.append(self._init_weights(self.n_features,self.n_main_features))
-                biases.append(self.n_main_features)
+            if self.multiplication_layer:
+                h = tf.matmul(inp, weights[w_idx]) + biases[b_idx]
+                b_idx += 1
+                w_idx += 1
+                if self.softmax:
+                    h = tf.nn.softmax(h)
+
+                self.portfolio_weights = h
+
+                z = tf.reduce_sum(x1 * h, axis = 1, name = "y")
             else:
-                weights.append(self._init_weights(self.n_features, 1))
-#        else:
-#            if self.nhl >= 1:
-#                weights.append(self._init_weights(self.n_features, self.hl1))
-#                biases.append(self.hl1)
-#            if self.nhl >= 2:
-#                weights.append(self._init_weights(self.hl1, self.hl2))
-#                biases.append(self.hl2)
-#            if self.nhl >= 3:
-#                weights.append(self._init_weights(self.hl2, self.hl3))
-#                biases.append(self.hl3)
-#
-#            if self.multiply_main_features:
-#                weights.append(self._init_weights(weights[-1].shape[1],self.n_main_features))
-#                biases.append(self.n_main_features)
-#            else:
-#                weights.append(self._init_weights(weights[-1].shape[1],1))
-#
-#
-#        if self.fit_bias:
-#            biases.append(self._init_bias(1))
+                if self.softmax:
+                    w = tf.nn.softmax(weights[w_idx], axis = 0)
+                else:
+                    w = weights[w_idx]
+                z = tf.matmul(inp, w, name = "y")
+                self.portfolio_weights = w
+                w_idx += 1
+        else:
+            if self.nhl >= 1:
+                h = self.activation_function(tf.matmul(inp, weights[w_idx]) + biases[b_idx])
+                b_idx += 1
+                w_idx += 1
+            if self.nhl >= 2:
+                h = self.activation_function(tf.matmul(h, weights[w_idx]) + biases[b_idx])
+                b_idx += 1
+                w_idx += 1
+            if self.nhl >= 3:
+                h = self.activation_function(tf.matmul(h, weights[w_idx]) + biases[b_idx])
+                b_idx += 1
+                w_idx += 1
 
+            if self.multiplication_layer:
+                h = tf.matmul(h, weights[w_idx]) + biases[b_idx]
+                b_idx += 1
+                w_idx += 1
+                if self.softmax:
+                    h = tf.nn.softmax(h)
 
+                self.portfolio_weights = h
+                z = tf.reduce_sum(x1 * h, axis = 1, name = "y")
+            else:
+                z = tf.matmul(h, weights[w_idx], name = "y")
+                self.portfolio_weights = weights[w_idx]
+                w_idx += 1
 
+        if self.fit_bias:
+            z = z+biases[b_idx]
 
-#        # Softmax activation function
-#        h = tf.nn.softmax(weights, dim = 0)
-#        # Add up contributions (name must be 'y')
-#        z = tf.matmul(x, h, name = 'y')
-#
-#        return z
-#        # get activations of hidden layer
-#        z = tf.add(tf.matmul(x, weights[0]), biases[0])
-#        h = self.activation_function(z)
-#
-#        # Add up contributions (name must be 'y')
-#        z = tf.add(tf.matmul(h, weights[1]), biases[1], name = 'y')
-#
-#        return z
+        return z
 
     def _generate_weights(self):
         """
@@ -624,37 +635,63 @@ class NN(BaseModel, Osprey):
         # Since some of the methods might be very bad, 
         # this makes more sense than just using the mean
         if self.bias_input:
-            weights.append(self._init_weights(self.n_main_features, 1, equal = True))
+            weights.append(self._init_weight(self.n_main_features, 1, equal = True))
 
         # Make the remaining weights in the network
         if self.nhl == 0:
-            if self.multiply_main_features:
-                weights.append(self._init_weights(self.n_features,self.n_main_features))
+            if self.multiplication_layer:
+                weights.append(self._init_weight(self.n_features,self.n_main_features))
                 biases.append(self.n_main_features)
             else:
-                weights.append(self._init_weights(self.n_features, 1))
+                weights.append(self._init_weight(self.n_features, 1))
         else:
             if self.nhl >= 1:
-                weights.append(self._init_weights(self.n_features, self.hl1))
+                weights.append(self._init_weight(self.n_features, self.hl1))
                 biases.append(self.hl1)
             if self.nhl >= 2:
-                weights.append(self._init_weights(self.hl1, self.hl2))
+                weights.append(self._init_weight(self.hl1, self.hl2))
                 biases.append(self.hl2)
             if self.nhl >= 3:
-                weights.append(self._init_weights(self.hl2, self.hl3))
+                weights.append(self._init_weight(self.hl2, self.hl3))
                 biases.append(self.hl3)
 
-            if self.multiply_main_features:
-                weights.append(self._init_weights(weights[-1].shape[1],self.n_main_features))
+            if self.multiplication_layer:
+                weights.append(self._init_weight(weights[-1].shape[1],self.n_main_features))
                 biases.append(self.n_main_features)
             else:
-                weights.append(self._init_weights(weights[-1].shape[1],1))
+                weights.append(self._init_weight(weights[-1].shape[1],1))
 
 
         if self.fit_bias:
             biases.append(self._init_bias(1))
 
         return weights, biases
+
+    def _cost(self, y_pred, y, weights):
+        """
+        Constructs the cost function
+
+        :param y_pred: Predicted output
+        :type y_pred: tf.Variable of size (None, 1)
+        :param y: True output
+        :type y: tf.placeholder of shape (None, 1)
+        :param weights: Weights used in the network.
+        :type weights: list of tf.Variable
+        :return: Cost
+        :rtype: tf.Variable of size (1,)
+        """
+
+        err = tf.square(tf.subtract(y,y_pred))
+        loss = tf.reduce_mean(err)
+        cost = loss
+        if self.l2_reg > 0:
+            l2_loss = self._l2_loss(weights)
+            cost = cost + l2_loss
+        if self.l1_reg > 0:
+            l1_loss = self._l1_loss(weights)
+            cost = cost + l1_loss
+
+        return cost
 
     def _init_weight(self, n1, n2, equal = False):
         """
@@ -744,167 +781,6 @@ class NN(BaseModel, Osprey):
         y_pred = self.predict(x)
         rmse = np.sqrt(mean_squared_error(y, y_pred, sample_weight = sample_weight))
         return rmse
-
-
-#class ConstrainedElasticNet(_NN, Osprey):
-#    """
-#    Solves a elastic net under the constraints that the weights
-#    sum to one and are all positive (softmax).
-#    l1 regression doesn't do anything due to the constraints,
-#    but l2 regression can still be included.
-#
-#    """
-#
-#    def __init__(self, **kwargs):
-#        super(ConstrainedElasticNet, self).__init__(**kwargs)
-#
-#    def _generate_weights(self):
-#        """
-#        Generates the weights.
-#
-#        :return: tuple of weights and biases, however there are no biases in this model.
-#        :rtype: tuple
-#        """
-#
-#        weights = self._init_weight(self.n_features, 1)
-#
-#        return weights, None
-#
-#    def _model(self, x, weights, biases = None):
-#        """
-#        Constructs the actual network.
-#
-#        :param x: Input
-#        :type x: tf.placeholder of shape (None, n_features)
-#        :param weights: Weights used in the network.
-#        :type weights: tf.Variable of shape (n_features, 1)
-#        :param biases: Dummy variable
-#        :type weights: NoneType
-#        :return: Output
-#        :rtype: tf.Variable of size (None, n_targets)
-#        """
-#
-#        # Softmax activation function
-#        h = tf.nn.softmax(weights, dim = 0)
-#        # Add up contributions (name must be 'y')
-#        z = tf.matmul(x, h, name = 'y')
-#
-#        return z
-#
-#    def _cost(self, y_pred, y, weights):
-#        """
-#        Constructs the cost function
-#
-#        :param y_pred: Predicted output
-#        :type y_pred: tf.Variable of size (None, 1)
-#        :param y: True output
-#        :type y: tf.placeholder of shape (None, 1)
-#        :param weights: Weights used in the network.
-#        :type weights: tf.Variable of shape (n_features, 1)
-#        :return: Cost
-#        :rtype: tf.Variable of size (1,)
-#        """
-#
-#        err = tf.square(tf.subtract(y,y_pred))
-#        loss = tf.reduce_mean(err)
-#        cost = loss
-#        if self.l2_reg > 0:
-#            l2_loss = self._l2_loss(weights)
-#            cost = cost + l2_loss
-#
-#        return cost
-#
-#    def _set_portfolio(self, weights):
-#        h = tf.nn.softmax(weights, dim = 0)
-#
-#        self.portfolio = h.eval(session = self.session).flatten()
-#
-#
-#class SingleLayeredNeuralNetwork(_NN, Osprey):
-#    """
-#    Neural net with a single hidden layer.
-#    Hyper-parameters are l1_reg, l2_reg, n_hidden
-#
-#    """
-#
-#    def __init__(self, n_hidden = 5, activation_function = "sigmoid", **kwargs):
-#        super(SingleLayeredNeuralNetwork, self).__init__(**kwargs)
-#
-#        self.n_hidden = n_hidden
-#        self._set_activation_function(activation_function)
-#
-#
-#    def _generate_weights(self):
-#        """
-#        Generates the weights.
-#
-#        :return: tuple of weights and biases
-#        :rtype: tuple
-#        """
-#
-#        weights, biases = [], []
-#
-#        weights.append(self._init_weight(self.n_features, self.n_hidden))
-#        weights.append(self._init_weight(self.n_hidden, 1))
-#
-#        biases.append(self._init_bias(self.n_hidden))
-#        biases.append(self._init_bias(1))
-#
-#        return weights, biases
-#
-#
-#    def _model(self, x, weights, biases = None):
-#        """
-#        Constructs the actual network.
-#
-#        :param x: Input
-#        :type x: tf.placeholder of shape (None, n_features)
-#        :param weights: Weights used in the network.
-#        :type weights: list of tf.Variables of shape (n_features, n_hidden)
-#            and (n_hidden, 1)
-#        :param biases: Biases used in the network
-#        :type weights: list of tf.Variables of shape (n_hidden,) and (1,)
-#        :return: Output
-#        :rtype: tf.Variable of size (None, n_targets)
-#        """
-#
-#        # get activations of hidden layer
-#        z = tf.add(tf.matmul(x, weights[0]), biases[0])
-#        h = self.activation_function(z)
-#
-#        # Add up contributions (name must be 'y')
-#        z = tf.add(tf.matmul(h, weights[1]), biases[1], name = 'y')
-#
-#        return z
-#
-#    def _cost(self, y_pred, y, weights):
-#        """
-#        Constructs the cost function
-#
-#        :param y_pred: Predicted output
-#        :type y_pred: tf.Variable of size (None, 1)
-#        :param y: True output
-#        :type y: tf.placeholder of shape (None, 1)
-#        :param weights: Weights used in the network.
-#        :type weights: list of tf.Variable
-#        :return: Cost
-#        :rtype: tf.Variable of size (1,)
-#        """
-#
-#        err = tf.square(tf.subtract(y,y_pred))
-#        loss = tf.reduce_mean(err)
-#        cost = loss
-#        if self.l2_reg > 0:
-#            l2_loss = self._l2_loss(weights)
-#            cost = cost + l2_loss
-#        if self.l1_reg > 0:
-#            l1_loss = self._l1_loss(weights)
-#            cost = cost + l1_loss
-#
-#        return cost
-#
-#    def _set_portfolio(self, weights):
-#        self.portfolio = weights[-1].eval(session = self.session).flatten()
 
 class SingleMethod(BaseModel):
     """
@@ -1010,7 +886,12 @@ if __name__ == "__main__":
     df = df.loc[(df.basis == "SV-P") | (df.basis == "sto-3g") | (df.basis == "svp")]
     x, y = reaction_dataframe_to_energies(df)
 
-    run_SingleMethod(x,y, 42)
+    # TODO test different options and print out shapes to make sure stuff works
+    m = NN()
+    m.fit(x,y)
+    print(np.where(m.portfolio > 0.01))
+
+    #run_SingleMethod(x,y, 42)
     # Might still be sensitive to number of iterations and learning rate
     #run_ConstrainedElasticNet(x,y, 42)
     # Now many more hyper parameters are relevant

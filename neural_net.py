@@ -824,6 +824,11 @@ if __name__ == "__main__":
     df = df.loc[(df.basis == "SV-P") | (df.basis == "sto-3g") | (df.basis == "svp")]
     x, y = reaction_dataframe_to_energies(df)
 
+    m = ConstrainedElasticNet(iterations = 5000, learning_rate = 0.3)
+    m.fit(x,y)
+    print(np.where(m.portfolio > 0.01))
+    quit()
+
     run_SingleMethod(x,y, 42)
     # Might still be sensitive to number of iterations and learning rate
     run_ConstrainedElasticNet(x,y, 42)
