@@ -39,6 +39,73 @@ def is_positive_integer_or_zero(x):
 class InputError(Exception):
     pass
 
+def plot_comparison(X, Y, xlabel = None, ylabel = None, filename = None):
+    """
+    Plots two sets of data against each other
+
+    :param x: First set of data points
+    :type x: array
+    :param y: Second set of data points
+    :type y: array
+    :param filename: File to save the plot to. If '' the plot is shown instead of saved.
+                     If the dimensionality of y is higher than 1, the filename will be prefixed
+                     by the dimension.
+    :type filename: string
+
+    """
+    try:
+        import seaborn as sns
+        import matplotlib.pyplot as plt
+        from matplotlib import rc
+    except ModuleNotFoundError:
+        raise ModuleNotFoundError("Plotting functions require the module 'seaborn'")
+
+    # set matplotlib defaults
+    sns.set(font_scale=2.)
+    sns.set_style("whitegrid",{'grid.color':'.92','axes.edgecolor':'0.92'})
+    rc('text', usetex=False)
+
+    # convert to arrays
+    x = np.asarray(X)
+    y = np.asarray(Y)
+
+    min_val = int(min(x.min(), y.min()) - 1)
+    max_val = int(max(x.max(), y.max()) + 1)
+
+    fig, ax = plt.subplots()
+
+    ax.scatter(x, y)
+    ax.set_xlim([min_val,max_val])
+    ax.set_ylim([min_val,max_val])
+
+    lims = [
+            np.min([ax.get_xlim(), ax.get_ylim()]),  # min of both axes
+            np.max([ax.get_xlim(), ax.get_ylim()]),  # max of both axes
+            ]
+    
+    # now plot both limits against eachother
+    ax.plot(lims, lims, 'k--', alpha=0.75, zorder=0)
+    ax.set_aspect('equal')
+    ax.set_xlim(lims)
+    ax.set_ylim(lims)
+
+    if not isinstance(xlabel, type(None)):
+        ax.set_xlabel(xlabel)
+    if not isinstance(ylabel, type(None)):
+        ax.set_ylabel(ylabel)
+
+    plt.savefig("comparison.pdf", pad_inches=0.0, bbox_inches = "tight", dpi = 300) 
+
+    if x.ndim != 1 or y.ndim != 1:
+        raise InputError("Input must be one dimensional")
+
+    if filename == None:
+        plt.show()
+    elif is_string(filename):
+        plt.save(filename)
+    else:
+        raise InputError("Wrong data type of variable 'filename'. Expected string")
+
 class Osprey(BaseEstimator):
     """
     Overrides scikit-learn calls to make inheritance work in the 
@@ -133,74 +200,12 @@ class BaseModel(object):
     def fit(self, x, y):
         raise NotImplementedError
 
-    def plot_comparison(self, X, Y, xlabel = None, ylabel = None, filename = None):
-        """
-        Plots two sets of data against each other
+    def score(self, x, y):
+        raise NotImplementedError
 
-        :param x: First set of data points
-        :type x: array
-        :param y: Second set of data points
-        :type y: array
-        :param filename: File to save the plot to. If '' the plot is shown instead of saved.
-                         If the dimensionality of y is higher than 1, the filename will be prefixed
-                         by the dimension.
-        :type filename: string
 
-        """
-        try:
-            import seaborn as sns
-            import matplotlib.pyplot as plt
-            from matplotlib import rc
-        except ModuleNotFoundError:
-            raise ModuleNotFoundError("Plotting functions require the module 'seaborn'")
-
-        # set matplotlib defaults
-        sns.set(font_scale=2.)
-        sns.set_style("whitegrid",{'grid.color':'.92','axes.edgecolor':'0.92'})
-        rc('text', usetex=False)
-
-        # convert to arrays
-        x = np.asarray(X)
-        y = np.asarray(Y)
-
-        min_val = int(min(x.min(), y.min()) - 1)
-        max_val = int(max(x.max(), y.max()) + 1)
-
-        fig, ax = plt.subplots()
-
-        ax.scatter(x, y)
-        ax.set_xlim([min_val,max_val])
-        ax.set_ylim([min_val,max_val])
-
-        lims = [
-                np.min([ax.get_xlim(), ax.get_ylim()]),  # min of both axes
-                np.max([ax.get_xlim(), ax.get_ylim()]),  # max of both axes
-                ]
-        
-        # now plot both limits against eachother
-        ax.plot(lims, lims, 'k--', alpha=0.75, zorder=0)
-        ax.set_aspect('equal')
-        ax.set_xlim(lims)
-        ax.set_ylim(lims)
-
-        if not isinstance(xlabel, type(None)):
-            ax.set_xlabel(xlabel)
-        if not isinstance(ylabel, type(None)):
-            ax.set_ylabel(ylabel)
-
-        plt.savefig("comparison.pdf", pad_inches=0.0, bbox_inches = "tight", dpi = 300) 
-
-        if x.ndim != 1 or y.ndim != 1:
-            raise InputError("Input must be one dimensional")
-
-        if filename == None:
-            plt.show()
-        elif is_string(filename):
-            plt.save(filename)
-        else:
-            raise InputError("Wrong data type of variable 'filename'. Expected string")
-
-class NN(BaseModel, Osprey):
+#class NN(BaseModel, Osprey): # No need for the osprey wrapper here
+class NN(BaseModel, BaseEstimator):
     """
     Neural network predictor.
 
@@ -376,13 +381,13 @@ class NN(BaseModel, Osprey):
         :rtype: tf.float32
         """
 
-        reg_term = tf.zeros([])
 
         if isinstance(weights, list):
-            for i in range(len(weights)):
-                reg_term += tf.reduce_sum(tf.square(weights[i]))
+            reg_term = tf.zeros([])
+            for weight in weights:
+                reg_term += tf.nn.l2_loss(weight)
         else:
-            reg_term += tf.reduce_sum(tf.square(weights))
+            reg_term += tf.nn.l2_loss(weights)
 
         return self.l2_reg * reg_term
 
@@ -396,13 +401,12 @@ class NN(BaseModel, Osprey):
         :rtype: tf.float32
         """
 
-        reg_term = tf.zeros([])
-
         if isinstance(weights, list):
-            for i in range(len(weights)):
-               reg_term += tf.reduce_sum(tf.abs(weights[i]))
+            reg_term = tf.zeros([])
+            for weight in weights:
+                reg_term += tf.nn.l1_loss(weight)
         else:
-            reg_term += tf.reduce_sum(tf.abs(weights))
+            reg_term += tf.nn.l1_loss(weights)
 
         return self.l1_reg * reg_term
 
@@ -782,7 +786,7 @@ class NN(BaseModel, Osprey):
         rmse = np.sqrt(mean_squared_error(y, y_pred, sample_weight = sample_weight))
         return rmse
 
-class SingleMethod(BaseModel):
+class SingleMethod(BaseModel, BaseEstimator):
     """
     Selects the single best method.
     """
