@@ -1,7 +1,6 @@
 # First number is reaction type, second is charge, 
 # third is spin state (1: singlet, 2: doublet)
 # 1: dissociation (one species dissociates to two)
-# NOTE: Could have H dissociation as it's own category
 C2H6O, CH3O CH3, 1, 0, 1
 Et-H, CH3 CH3, 1, 0, 1
 Et-H, Et H, 1, 0, 1

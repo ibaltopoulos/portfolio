@@ -6,13 +6,6 @@
 # 3: Dissociation/Association barrier height
 # 4: Heavy atom transfer barrier height (TS on right hand side)
 #    The direction of the reaction is such that energy is released
-#
-# 5: charged methyle transfer barrier height complex (complex to TS)
-#    or
-#    Intra-molecular reorganization barrier height
-# 8: Intra-molecular reorganization
-# 9: methyle transfer complex (pre-reaction complex to post-reaction complex)
-#    (Could alternatively be seen as an intra-molecular reorganization)
 H N2O, OH N2, 2, 0, 2
 H CH3F,HF CH3, 2, 0, 2
 H F2, HF F, 2, 0, 2
@@ -23,9 +16,11 @@ HN2, H N2, 1, 0, 2
 HCO, H CO, 1, 0, 2
 CH3CH2, H C2H4, 1, 0, 2
 CH3CH2CH2, CH3 C2H4, 1, 0, 2
-# HNC, HCN, 8, 0, 1 # Removed since rare
-# HOCH3Fcomp2, HOCH3Fcomp1, 9, -1, 1 # Removed since rare
-# FCH3Clcomp1, FCH3Clcomp2, 9, -1, 1 # Removed since rare
+# NOTE: Inter-molecular
+HNC, HCN, 2, 0, 1
+# NOTE: Removed since they are so similar to the infinite separation ones
+# HOCH3Fcomp2, HOCH3Fcomp1, 2, -1, 1
+# FCH3Clcomp1, FCH3Clcomp2, 2, -1, 1
 H N2O, TS1, 4, 0, 2
 H HF, TS2, 4, 0, 2
 H HCl, TS3, 4, 0, 2
@@ -50,16 +45,13 @@ HN2, TS15, 3, 0, 2
 HCO, TS16, 3, 0, 2
 CH3CH2, TS17, 3, 0, 2
 CH3CH2CH2, TS18, 3, 0, 2
-# Intra-molecular reorganization barrier heights and methyle
-# transfer barrier heights are grouped together since there
-# is only two reorganizations
-# NOTE: Could merge this with inter-molecular ones
-HNC, TS19, 5, 0, 1
-HCN, TS19, 5, 0, 1
-# NOTE: Could remove these as they are so similar to the non complex ones
-FCH3Fcomp, TS7, 5, -1, 1
-ClCH3Clcomp, TS9, 5, -1, 1
-FCH3Clcomp1, TS11, 5, -1, 1
-HOCH3Fcomp1, TS13, 5, -1, 1
-FCH3Clcomp2, TS11, 5, -1, 1
-HOCH3Fcomp2, TS13, 5, -1, 1
+# NOTE: Inter-molecular
+HNC, TS19, 4, 0, 1
+HCN, TS19, 4, 0, 1
+# NOTE: Removed since they are so similar to the infinite separation ones
+#FCH3Fcomp, TS7, 4, -1, 1
+#ClCH3Clcomp, TS9, 4, -1, 1
+#FCH3Clcomp1, TS11, 4, -1, 1
+#HOCH3Fcomp1, TS13, 4, -1, 1
+#FCH3Clcomp2, TS11, 4, -1, 1
+#HOCH3Fcomp2, TS13, 4, -1, 1
