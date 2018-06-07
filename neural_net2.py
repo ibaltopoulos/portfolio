@@ -35,6 +35,12 @@ def _is_integer(x):
 def is_positive_integer_or_zero(x):
     return (not is_array_like(x) and _is_integer(x) and x >= 0)
 
+def is_none(x):
+    try:
+        return (x == None)
+    except:
+        return False
+
 # custom exception to raise when we intentionally catch an error
 class InputError(Exception):
     pass
@@ -43,10 +49,14 @@ def plot_comparison(X, Y, xlabel = None, ylabel = None, filename = None):
     """
     Plots two sets of data against each other
 
-    :param x: First set of data points
-    :type x: array
-    :param y: Second set of data points
-    :type y: array
+    :param X: First set of data points
+    :type X: array
+    :param Y: Second set of data points
+    :type Y: array
+    :param xlabel: Label for x-axis
+    :type xlabel: string
+    :param ylabel: Label for y-ayis
+    :type ylabel: string
     :param filename: File to save the plot to. If '' the plot is shown instead of saved.
                      If the dimensionality of y is higher than 1, the filename will be prefixed
                      by the dimension.
@@ -58,7 +68,7 @@ def plot_comparison(X, Y, xlabel = None, ylabel = None, filename = None):
         import matplotlib.pyplot as plt
         from matplotlib import rc
     except ModuleNotFoundError:
-        raise ModuleNotFoundError("Plotting functions require the module 'seaborn'")
+        raise ModuleNotFoundError("Plotting functions require the modules 'seaborn' and 'matplotlib'")
 
     # set matplotlib defaults
     sns.set(font_scale=2.)
@@ -69,12 +79,16 @@ def plot_comparison(X, Y, xlabel = None, ylabel = None, filename = None):
     x = np.asarray(X)
     y = np.asarray(Y)
 
+    # NOTE: If energy is not kcal/mol this might not be sensible
     min_val = int(min(x.min(), y.min()) - 1)
     max_val = int(max(x.max(), y.max()) + 1)
 
     fig, ax = plt.subplots()
 
+    # Create the scatter plot
     ax.scatter(x, y)
+
+    # Set limits
     ax.set_xlim([min_val,max_val])
     ax.set_ylim([min_val,max_val])
 
@@ -82,27 +96,35 @@ def plot_comparison(X, Y, xlabel = None, ylabel = None, filename = None):
             np.min([ax.get_xlim(), ax.get_ylim()]),  # min of both axes
             np.max([ax.get_xlim(), ax.get_ylim()]),  # max of both axes
             ]
-    
+
     # now plot both limits against eachother
     ax.plot(lims, lims, 'k--', alpha=0.75, zorder=0)
     ax.set_aspect('equal')
     ax.set_xlim(lims)
     ax.set_ylim(lims)
 
-    if not isinstance(xlabel, type(None)):
-        ax.set_xlabel(xlabel)
-    if not isinstance(ylabel, type(None)):
-        ax.set_ylabel(ylabel)
-
-    plt.savefig("comparison.pdf", pad_inches=0.0, bbox_inches = "tight", dpi = 300) 
+    # Set labels
+    if not is_none(xlabel):
+        if is_string(xlabel): 
+            ax.set_xlabel(xlabel)
+        else:
+            raise InputError("Wrong data type of variable 'xlabel'. Expected string, got %s" % str(xlabel))
+    if not is_none(ylabel):
+        if is_string(ylabel): 
+            ax.set_ylabel(ylabel)
+        else:
+            raise InputError("Wrong data type of variable 'ylabel'. Expected string, got %s" % str(ylabel))
 
     if x.ndim != 1 or y.ndim != 1:
         raise InputError("Input must be one dimensional")
 
-    if filename == None:
+    # Plot or save
+    if is_none(filename)
         plt.show()
     elif is_string(filename):
-        plt.save(filename)
+        if "." not in filename:
+            filename = filename + ".pdf"
+        plt.savefig(filename, pad_inches=0.0, bbox_inches = "tight", dpi = 300) 
     else:
         raise InputError("Wrong data type of variable 'filename'. Expected string")
 
@@ -115,67 +137,67 @@ class Osprey(BaseEstimator):
     def __init__(self, **kwargs):
         pass
 
-    def get_params(self, deep = True):
-        """
-        Hack that overrides the get_params routine of BaseEstimator.
-        self.get_params() returns the input parameters of __init__. However it doesn't
-        handle inheritance well, as we would like to include the input parameters to
-        __init__ of all the parents as well.
-
-        """
-
-        # First get the name of the class self belongs to
-        base_class = self.__class__.__base__
-
-        # Then get names of the parents and their parents etc
-        # excluding 'object'
-        parent_classes = [c for c in base_class.__bases__ if c.__name__ not in "object"]
-        # Keep track of whether new classes are added to parent_classes
-        n = 0
-        n_update = len(parent_classes)
-        # limit to 10 generations to avoid infinite loop
-        for i in range(10):
-            for parent_class in parent_classes[n:]:
-                parent_classes.extend([c for c in parent_class.__bases__ if 
-                    (c.__name__ not in "object" and c not in parent_classes)])
-            n = n_update
-            n_update = len(parent_classes)
-            if n == n_update:
-                break
-        else:
-            print("Warning: Only included first 10 generations of parents of the called class")
-
-        params = BaseEstimator.get_params(self)
-        for parent in names_of_parents:
-            parent_init = (parent + ".__init__")
-
-            # Modified from the scikit-learn BaseEstimator class
-            parent_init_signature = signature(parent_init)
-            for p in (p for p in parent_init_signature.parameters.values() 
-                    if p.name != 'self' and p.kind != p.VAR_KEYWORD):
-                if p.name in params:
-                    raise InputError('This should never happen')
-                if hasattr(self, p.name):
-                    params[p.name] = getattr(self, p.name)
-                else:
-                    params[p.name] = p.default
-
-        return params
-
-    def set_params(self, **params):
-        """
-        Hack that overrides the set_params routine of BaseEstimator.
-
-        """
-        for key, value in params.items():
-            key, delim, sub_key = key.partition('__')
-
-            if delim:
-                nested_params[key][sub_key] = value
-            else:
-                setattr(self, key, value)
-
-        return self
+#    def get_params(self, deep = True):
+#        """
+#        Hack that overrides the get_params routine of BaseEstimator.
+#        self.get_params() returns the input parameters of __init__. However it doesn't
+#        handle inheritance well, as we would like to include the input parameters to
+#        __init__ of all the parents as well.
+#
+#        """
+#
+#        # First get the name of the class self belongs to
+#        base_class = self.__class__.__base__
+#
+#        # Then get names of the parents and their parents etc
+#        # excluding 'object'
+#        parent_classes = [c for c in base_class.__bases__ if c.__name__ not in "object"]
+#        # Keep track of whether new classes are added to parent_classes
+#        n = 0
+#        n_update = len(parent_classes)
+#        # limit to 10 generations to avoid infinite loops
+#        for i in range(10):
+#            for parent_class in parent_classes[n:]:
+#                parent_classes.extend([c for c in parent_class.__bases__ if 
+#                    (c.__name__ not in "object" and c not in parent_classes)])
+#            n = n_update
+#            n_update = len(parent_classes)
+#            if n == n_update:
+#                break
+#        else:
+#            print("Warning: Only included first 10 generations of parents of the called class")
+#
+#        params = BaseEstimator.get_params(self)
+#        for parent in names_of_parents:
+#            parent_init = (parent + ".__init__")
+#
+#            # Modified from the scikit-learn BaseEstimator class
+#            parent_init_signature = signature(parent_init)
+#            for p in (p for p in parent_init_signature.parameters.values() 
+#                    if p.name != 'self' and p.kind != p.VAR_KEYWORD):
+#                if p.name in params:
+#                    raise InputError('This should never happen')
+#                if hasattr(self, p.name):
+#                    params[p.name] = getattr(self, p.name)
+#                else:
+#                    params[p.name] = p.default
+#
+#        return params
+#
+#    def set_params(self, **params):
+#        """
+#        Hack that overrides the set_params routine of BaseEstimator.
+#
+#        """
+#        for key, value in params.items():
+#            key, delim, sub_key = key.partition('__')
+#
+#            if delim:
+#                nested_params[key][sub_key] = value
+#            else:
+#                setattr(self, key, value)
+#
+#        return self
 
     def score(self, x, y = None):
         # Osprey maximises a score per default, so return minus mae/rmsd and plus r2
@@ -204,36 +226,59 @@ class BaseModel(object):
         raise NotImplementedError
 
 
-#class NN(BaseModel, Osprey): # No need for the osprey wrapper here
-class NN(BaseModel, BaseEstimator):
+class NN(BaseModel, Osprey):
     """
     Neural network predictor.
 
     """
 
-    def __init__(self, learning_rate = 0.3, iterations = 5000, l1_reg = 0.0, l2_reg = 0.0, 
+    def __init__(self, learning_rate = 0.3, iterations = 5000, cost_reg = 0.0, l2_reg = 0.0, 
             scoring_function = 'rmse', optimiser = "Adam", softmax = True, fit_bias = False,
             nhl = 0, hl1 = 5, hl2 = 5, hl3 = 5, multiplication_layer = False, activation_function = "sigmoid",
-            bias_input = False, n_main_features = -1, **kwargs):
+            bias_input = False, n_main_features = -1, single_thread = True, tensorboard_dir = '', **kwargs):
         """
-        :param l1_reg: L1-regularisation parameter for the neural network weights
-        :type l1_reg: float
-        :param l2_reg: L2-regularisation parameter for the neural network weights
-        :type l2_reg: float
         :param learning_rate: The learning rate in the numerical minimisation.
         :type learning_rate: float
         :param iterations: Total number of iterations that will be carried out during the training process.
         :type iterations: integer
-        :param scoring_function: Scoring function to use. Available choices are 'mae', 'rmse', 'r2'.
+        :param cost_reg: L1-regularisation parameter on the cost for the neural network
+        :type cost_reg: float
+        :param l2_reg: L2-regularisation parameter for the neural network weights
+        :type l2_reg: float
+        :param scoring_function: Scoring function to use. Available choices are `mae`, `rmse`, `r2`.
         :type scoring_function: string
         :param optimiser: Which tensorflow optimiser to use
         :type optimiser: string or tensorflow optimizer
+        :param softmax: Use softmax on the method (portfolio) weights, such that all weights are positive and sum to one.
+        :type softmax: bool
+        :param fit_bias: Fit a bias to the final portfolio to offset systematic errors
+        :type fit_bias: bool
+        :param nhl: Number of hidden layers. Has to be between 1 and 3.
+        :type nhl: int
+        :param hl1: Size of first hidden layer
+        :type hl1: int
+        :param hl2: Size of first hidden layer
+        :type hl2: int
+        :param hl3: Size of first hidden layer
+        :type hl3: int
+        :param multiplication_layer: Forces that the final result is a linear combination of the main_features
+        :type multiplication_layer: bool
+        :param activation_function: Activation function of the hidden layers.
+        :type activation_function: string
+        :param bias_input: Subtract a weighted mean from the main input features
+        :type bias_input: bool
+        :param n_main_features: The number of main features
+        :type n_main_features: int
+        :param single_thread: Force tensorflow to use only one thread. Should be False for gpus
+        :type single_thread: bool
+        :param tensorboard_dir: Directory for tensorboard logging. Logging won't be performed if `tensorboard_dir = ''` 
+        :type tensorboard_dir: string
 
         """
 
         # Initialise parents
         super(self.__class__.__base__, self).__init__(**kwargs)
-        self._set_l1_reg(l1_reg)
+        self._set_cost_reg(cost_reg)
         self._set_l2_reg(l2_reg)
         self._set_learning_rate(learning_rate)
         self._set_iterations(iterations)
@@ -246,6 +291,8 @@ class NN(BaseModel, BaseEstimator):
         self._set_bias_input(bias_input)
         self._set_n_main_features(n_main_features)
         self._set_hidden_layers(nhl, hl1, hl2, hl3)
+        self._set_single_thread(single_thread)
+        self._set_tensorboard_dir(tensorboard_dir)
 
         self._validate_options()
 
@@ -331,10 +378,10 @@ class NN(BaseModel, BaseEstimator):
         else:
             raise InputError("Expected variable 'n_main_features' to be positive integer. Got %s" % str(n_main_features))
 
-    def _set_l1_reg(self, l1_reg):
-        if not is_positive_or_zero(l1_reg):
-            raise InputError("Expected positive float value for variable 'l1_reg'. Got %s" % str(l1_reg))
-        self.l1_reg = l1_reg
+    def _set_cost_reg(self, cost_reg):
+        if not is_positive_or_zero(cost_reg):
+            raise InputError("Expected positive float value for variable 'cost_reg'. Got %s" % str(cost_reg))
+        self.cost_reg = cost_reg
 
     def _set_l2_reg(self, l2_reg):
         if not is_positive_or_zero(l2_reg):
@@ -371,6 +418,16 @@ class NN(BaseModel, BaseEstimator):
         else:
             raise InputError("Expected a string or tensorflow.optimiser object for variable 'optimiser'. Got %s" % str(optimiser))
 
+    def _set_single_thread(self, single_thread):
+        if not is_bool(single_thread):
+            raise InputError("Expected boolean for variable single_thread. Got %s" % str(single_thread))
+        self.single_thread = bool(single_thread)
+
+    def _set_tensorboard_dir(self, tensorboard_dir):
+        if not (is_string(tensorboard_dir) or is_none(tensorboard_dir)):
+            raise InputError("Expected string for variable tensorboard_dir. Got %s" % str(tensorboard_dir))
+        self.tensorboard_dir = str(tensorboard_dir)
+
     def _l2_loss(self, weights):
         """
         Creates the expression for L2-regularisation on the weights
@@ -383,60 +440,57 @@ class NN(BaseModel, BaseEstimator):
 
 
         if isinstance(weights, list):
-            reg_term = tf.zeros([])
+            reg_term = tf.zeros([], name = "l2_loss")
             for weight in weights:
                 reg_term += tf.nn.l2_loss(weight)
         else:
-            reg_term += tf.nn.l2_loss(weights)
+            reg_term += tf.nn.l2_loss(weights, name = "l2_loss")
 
         return self.l2_reg * reg_term
 
-    def _l1_loss(self, weights):
+    def _cost_loss(self, weights, cost):
         """
-        Creates the expression for L1-regularisation on the weights
+        Creates the expression for L1-regularisation on the cost
 
-        :param weights: tensorflow tensors representing the weights
-        :type weights: list or tensor
+        :param weights: tensorflow tensors representing the method weights
+        :type weights: tensor
+        :param cost: tensorflow tensors representing the cost (computational or similar)
+        :type cost: tensor
         :return: tensorflow scalar representing the regularisation contribution to the cost function
         :rtype: tf.float32
         """
 
-        if isinstance(weights, list):
-            reg_term = tf.zeros([])
-            for weight in weights:
-                reg_term += tf.nn.l1_loss(weight)
-        else:
-            reg_term += tf.nn.l1_loss(weights)
+        reg_term = tf.matmul(cost, weights, name = "cost_reg") * self.cost_reg
 
-        return self.l1_reg * reg_term
+        return reg_term
 
-    def plot_cost(self, filename = None):
-        """
-        Plots the value of the cost function as a function of the iterations.
-
-        :param filename: File to save the plot to. If '' the plot is shown instead of saved.
-        :type filename: string
-        """
-
-        try:
-            import pandas as pd
-            import seaborn as sns
-        except ModuleNotFoundError:
-            raise ModuleNotFoundError("Plotting functions require the modules 'seaborn' and 'pandas'")
-
-        sns.set()
-        df = pd.DataFrame()
-        df["Iterations"] = range(len(self.training_cost))
-        df["Training cost"] = self.training_cost
-        f = sns.lmplot('Iterations', 'Training cost', data=df, scatter_kws={"s": 20, "alpha": 0.6}, line_kws={"alpha": 0.5}, fit_reg=False)
-        f.set(yscale = "log")
-
-        if filename == None:
-            plt.show()
-        elif is_string(filename):
-            plt.save(filename)
-        else:
-            raise InputError("Wrong data type of variable 'filename'. Expected string")
+#    def plot_loss(self, filename = None):
+#        """
+#        Plots the value of the loss function as a function of the iterations.
+#
+#        :param filename: File to save the plot to. If None the plot is shown instead of saved.
+#        :type filename: string
+#        """
+#
+#        try:
+#            import pandas as pd
+#            import seaborn as sns
+#        except ModuleNotFoundError:
+#            raise ModuleNotFoundError("Plotting functions require the modules 'seaborn' and 'pandas'")
+#
+#        sns.set()
+#        df = pd.DataFrame()
+#        df["Iterations"] = range(len(self.training_loss))
+#        df["Training loss"] = self.training_loss_
+#        f = sns.lmplot('Iterations', 'Training loss', data=df, scatter_kws={"s": 20, "alpha": 0.6}, line_kws={"alpha": 0.5}, fit_reg=False)
+#        f.set(yscale = "log")
+#
+#        if is_none(filename):
+#            plt.show()
+#        elif is_string(filename):
+#            plt.save(filename)
+#        else:
+#            raise InputError("Wrong data type of variable 'filename'. Expected string")
 
     def _score(self, *args):
         if self.scoring_function == 'mae':
@@ -458,7 +512,7 @@ class NN(BaseModel, BaseEstimator):
 
         """
 
-        if self.session == None:
+        if is_none(self.session):
             raise InputError("Model needs to be fit before predictions can be made.")
 
         check_array(x, warn_on_dtype = True)
@@ -481,12 +535,9 @@ class NN(BaseModel, BaseEstimator):
         :type y: array of size (n_samples, )
 
         """
-        # Clears the current graph
+        # Clears the current graph (Makes predictions a bit easier)
         tf.reset_default_graph()
 
-        # set n_main_features if previously set to -1
-        if self.n_main_features == -1:
-            self.n_main_features = x.shape[1]
 
         # Check that X and y have correct shape
         x, y = check_X_y(x, y, multi_output = False, y_numeric = True, warn_on_dtype = True)
@@ -498,17 +549,23 @@ class NN(BaseModel, BaseEstimator):
         self.n_features = x.shape[1]
         self.n_samples = x.shape[0]
 
+        # set n_main_features if previously set to -1
+        if self.n_main_features == -1:
+            self.n_main_features = self.n_features
+
         # Initial set up of the NN
-        tf_x = tf.placeholder(tf.float32, [None, self.n_features], name="x")
+        tf_x_main = tf.placeholder(tf.float32, [None, self.n_main_features], name="x_main")
+        # Might be of shape (?, 0) which is fine
+        tf_x_sec = tf.placeholder(tf.float32, [None, x.shape[1] - self.n_main_features], name="x_sec")
         tf_y = tf.placeholder(tf.float32, [None, 1], name="y")
 
-        # Generate weights
+        # Generate weights and biases
         weights, biases = self._generate_weights()
 
         # Create the graph
-        y_pred = self._model(tf_x, weights, biases)
+        y_pred = self._model(tf_x_main, tf_x_sec, weights, biases)
 
-        cost = self._cost(y_pred, tf_y, weights)
+        loss = self._loss(y_pred, tf_y, weights)
 
         optimizer = self.optimiser(learning_rate=self.learning_rate).minimize(cost)
 
@@ -516,12 +573,14 @@ class NN(BaseModel, BaseEstimator):
         init = tf.global_variables_initializer()
 
         # Force tensorflow to only use 1 thread
-        # Uncomment to use all cpus
-        session_conf = tf.ConfigProto(
-                            intra_op_parallelism_threads=1,
-                            inter_op_parallelism_threads=1)
+        if self.single_thread:
+            session_conf = tf.ConfigProto(
+                                intra_op_parallelism_threads=1,
+                                inter_op_parallelism_threads=1)
 
-        self.session = tf.Session(config = session_conf)
+            self.session = tf.Session(config = session_conf)
+        else:
+            self.session = tf.Session()
 
         # Running the graph
         self.session.run(init)
@@ -534,15 +593,23 @@ class NN(BaseModel, BaseEstimator):
         # Store the final portfolio weights
         self._set_portfolio()
 
+        # Store logs for tensorboard
+        if self.tensorboard_dir != '':
+            with tf.summary.FileWriter(self.tensorboard_dir, self.session.graph):
+
+
+    # TODO this assumes that we actually construct a portfolio
     def _set_portfolio(self):
         self.portfolio = self.portfolio_weights.eval(session = self.session).flatten()
 
-    def _model(self, x, weights, biases = None):
+    def _model(self, x_main, x_sec, weights, biases = None):
         """
         Constructs the actual network.
 
-        :param x: Input
-        :type x: tf.placeholder of shape (None, n_features)
+        :param x_main: Main input (e.g. method energies)
+        :type x_main: tf.placeholder of shape (None, n_main_features)
+        :param x_sec: Secondary input (e.g. reaction classes / system charge / multiplicity)
+        :type x_sec: tf.placeholder of shape (None, n_features - n_main_features)
         :param weights: Weights used in the network.
         :type weights: tf.Variable of shape (n_features, 1)
         :param biases: Dummy variable
@@ -555,21 +622,15 @@ class NN(BaseModel, BaseEstimator):
         # since the various options obscures this
         w_idx, b_idx = 0, 0
 
-        # split up x in main and secondary parts
-        x1 = x[:,:self.n_main_features]
-        x2 = x[:,self.n_main_features:]
-
         # Make the biases input
         if self.bias_input:
             # get the bias
-            b = tf.matmul(x1, weights[w_idx])
+            b = tf.matmul(x_main, weights[w_idx], name = "input_bias")
             w_idx += 1
             # subtract the bias from the main features
-            x1b = x1 - b
-            # concatenate the two parts of x
-            inp = tf.concat([x1b, x2], axis = 1)
+            x_main_biased = tf.subtract(x_main, b, name = "x_main_biased")
         else:
-            inp = x
+            x_main_biased = x_main
 
         if self.nhl == 0:
             if self.multiplication_layer:
@@ -581,13 +642,13 @@ class NN(BaseModel, BaseEstimator):
 
                 self.portfolio_weights = h
 
-                z = tf.reduce_sum(x1 * h, axis = 1, name = "y")
+                z = tf.reduce_sum(x1 * h, axis = 1, name = "model")
             else:
                 if self.softmax:
                     w = tf.nn.softmax(weights[w_idx], axis = 0)
                 else:
                     w = weights[w_idx]
-                z = tf.matmul(inp, w, name = "y")
+                z = tf.matmul(inp, w, name = "model")
                 self.portfolio_weights = w
                 w_idx += 1
         else:
@@ -612,9 +673,9 @@ class NN(BaseModel, BaseEstimator):
                     h = tf.nn.softmax(h)
 
                 self.portfolio_weights = h
-                z = tf.reduce_sum(x1 * h, axis = 1, name = "y")
+                z = tf.reduce_sum(x1 * h, axis = 1, name = "model")
             else:
-                z = tf.matmul(h, weights[w_idx], name = "y")
+                z = tf.matmul(h, weights[w_idx], name = "model")
                 self.portfolio_weights = weights[w_idx]
                 w_idx += 1
 
@@ -764,7 +825,7 @@ class NN(BaseModel, BaseEstimator):
         mae = mean_absolute_error(y, y_pred, sample_weight = sample_weight)
         return mae
 
-    def _score_rmse(self, x, y, sample_weight=None):
+    def _score_rmse(self, x, y, sample_weight = None):
         """
         Calculate the root mean squared error.
         Smaller values corresponds to a better prediction.
