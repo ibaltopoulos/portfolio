@@ -10,6 +10,7 @@ import pickle
 from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error
 import pandas as pd
 import sys
+import os
 
 def is_positive(x):
     return (not is_array_like(x) and _is_numeric(x) and x > 0)
@@ -36,16 +37,13 @@ def is_positive_integer_or_zero(x):
     return (not is_array_like(x) and _is_integer(x) and x >= 0)
 
 def is_none(x):
-    try:
-        return (x == None)
-    except:
-        return False
+    return isinstance(x, type(None))
 
 def is_bool(x):
     return isinstance(x, bool)
 
 def is_positive_array(x):
-    return (is_array(x) and (x>0).all())
+    return (is_array_like(x) and (x>0).all())
 
 # custom exception to raise when we intentionally catch an error
 class InputError(Exception):
@@ -153,7 +151,7 @@ class TensorBoardLogger(object):
             os.makedirs(self.path)
 
         self.merged_summary = tf.summary.merge_all()
-        self.options = tf.RunOptions()
+        self.options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
         self.options.output_partition_graphs = True
         self.options.trace_level = tf.RunOptions.SOFTWARE_TRACE
         self.run_metadata = tf.RunMetadata()
@@ -164,7 +162,7 @@ class TensorBoardLogger(object):
         self.summary_writer = tf.summary.FileWriter(logdir=self.path, graph=sess.graph)
 
     def write_summary(self, session, feed_dict, iteration, batch_no):
-        if self.use_logger == False:
+        if (self.use_logger == False) or (iteration % self.store_frequency != 0):
             return
         # The options flag is needed to obtain profiling information
         summary = session.run(self.merged_summary, feed_dict = feed_dict,
@@ -172,15 +170,16 @@ class TensorBoardLogger(object):
         self.summary_writer.add_summary(summary, iteration)
         self.summary_writer.add_run_metadata(self.run_metadata, 'iteration %d batch %d' % (iteration, batch_no))
 
-    def write_weight_histogram(self, weights):
+    def write_histogram(self, weights, biases):
         if self.use_logger == False:
             return
-        tf.summary.histogram("weights_in", weights[0])
-        for i in range(len(weights) - 1):
-            tf.summary.histogram("weights_hidden_%d" % i, weights[i + 1])
-            tf.summary.histogram("weights_out", weights[-1])
+        for i, weight in enumerate(weights):
+            tf.summary.histogram("weights_%d" % i, weights[i])
+        for i, weight in enumerate(biases):
+            tf.summary.histogram("biases_%d" % i, biases[i])
 
-    def write_scalar_summary(name, tensor):
+
+    def write_scalar_summary(self, name, tensor):
         tf.summary.scalar(name, tensor)
 
 class Osprey(BaseEstimator):
@@ -357,7 +356,6 @@ class NN(BaseModel, Osprey):
         self._validate_options()
 
         # Placeholder variables
-        self.training_cost = []
         self.session = None
 
     def _validate_options(self):
@@ -500,7 +498,7 @@ class NN(BaseModel, Osprey):
             store_frequency = self.iterations
 
         # TensorBoardLogger will handle all tensorboard related things
-        self.tensorboard_logger = TensorBoardLogger(tensorboard_dir, store_frequency)
+        self.tensorboard_logger = TensorBoardLogger(path = tensorboard_dir, store_frequency = store_frequency)
 
     def _set_cost(self, cost):
         if is_none(cost):
@@ -521,29 +519,27 @@ class NN(BaseModel, Osprey):
         :rtype: tf.float32
         """
 
-
-        if isinstance(weights, list):
-            reg_term = tf.zeros([], name = "l2_loss")
-            for weight in weights:
+        with tf.name_scope("l2_reg_loss"):
+            reg_term = tf.nn.l2_loss(weights[0])
+            for weight in weights[1:]:
                 reg_term += tf.nn.l2_loss(weight)
-        else:
-            reg_term += tf.nn.l2_loss(weights, name = "l2_loss")
+            reg_term *= self.l2_reg
 
-        return self.l2_reg * reg_term
+        return reg_term
 
-    def _cost_loss(self, weights, cost):
+    def _cost_loss(self):
         """
         Creates the expression for L1-regularisation on the cost
 
-        :param weights: tensorflow tensors representing the method weights
-        :type weights: tensor
-        :param cost: tensorflow tensors representing the cost (computational or similar)
-        :type cost: tensor
         :return: tensorflow scalar representing the regularisation contribution to the cost function
         :rtype: tf.float32
         """
 
-        reg_term = tf.matmul(cost, weights, name = "cost_reg") * self.cost_reg
+        with tf.name_scope("cost_reg_loss"):
+            cost = tf.constant(self.cost, shape = (1, self.n_main_features), dtype = tf.float32, name = "comp_cost")
+            reg_term = tf.multiply(
+                    tf.squeeze(
+                        tf.matmul(cost, self.portfolio_weights), name = "estimated_cost"), self.cost_reg, name = "cost_reg")
 
         return reg_term
 
@@ -574,6 +570,18 @@ class NN(BaseModel, Osprey):
 #            plt.save(filename)
 #        else:
 #            raise InputError("Wrong data type of variable 'filename'. Expected string")
+
+
+    def _make_session(self):
+        # Force tensorflow to only use 1 thread
+        if self.single_thread:
+            session_conf = tf.ConfigProto(
+                                intra_op_parallelism_threads=1,
+                                inter_op_parallelism_threads=1)
+
+            self.session = tf.Session(config = session_conf)
+        else:
+            self.session = tf.Session()
 
     def _score(self, *args):
         if self.scoring_function == 'mae':
@@ -638,66 +646,57 @@ class NN(BaseModel, Osprey):
             self.n_main_features = self.n_features
 
         # Set cost to be constant if not passed
-        if is_none(cost):
-            cost = np.ones(x.shape[0], self.n_main_features)
-        else:
-            # TODO FIX THIS
-            if cost.shape
-        # Check that cost has the correct shape
+        if is_none(self.cost):
+            self.cost = np.ones(self.n_main_features)
+        elif self.cost.ndim != 1 and self.cost.shape[0] != self.n_features:
+            raise InputError("Expected variable 'cost' to have shape (%d, ). Got %s" 
+                    % (self.n_features, str(self.cost.shape)))
 
         # Initial set up of the NN
-        tf_x_main = tf.placeholder(tf.float32, [None, self.n_main_features], name="x_main")
-        # Might be of shape (?, 0) which is fine
-        tf_x_sec = tf.placeholder(tf.float32, [None, x.shape[1] - self.n_main_features], name="x_sec")
-        tf_y = tf.placeholder(tf.float32, [None, 1], name="y")
+        with tf.name_scope("Data"):
+            tf_x = tf.placeholder(tf.float32, [None, self.n_features], name="x")
+            tf_y = tf.placeholder(tf.float32, [None, 1], name="y")
 
         # Generate weights and biases
         weights, biases = self._generate_weights()
         # Create histogram of weights with tensorboard
-        self.tensorboard_logger.write_weight_histogram(weights)
+        self.tensorboard_logger.write_histogram(weights, biases)
 
         # Create the graph
-        y_pred = self._model(tf_x_main, tf_x_sec, weights, biases)
+        y_pred = self._model(tf_x, weights, biases)
 
         # Create loss function
-        loss = self._loss(y_pred, tf_y, weights, cost)
+        loss = self._loss(y_pred, tf_y, weights)
         # Create summary of loss with tensorboard
         self.tensorboard_logger.write_scalar_summary('loss', loss)
 
-        optimizer = self.optimiser(learning_rate=self.learning_rate).minimize(loss)
+        optimiser = self.optimiser(learning_rate=self.learning_rate).minimize(loss)
 
         # Initialisation of the variables
         init = tf.global_variables_initializer()
+        self.tensorboard_logger.initialise()
 
-        # Force tensorflow to only use 1 thread
-        if self.single_thread:
-            session_conf = tf.ConfigProto(
-                                intra_op_parallelism_threads=1,
-                                inter_op_parallelism_threads=1)
-
-            self.session = tf.Session(config = session_conf)
-        else:
-            self.session = tf.Session()
+        # Create the session
+        self._make_session()
 
         # Running the graph
         self.tensorboard_logger.set_summary_writer(self.session)
         self.session.run(init)
 
         for i in range(self.iterations):
-            feed_dict = {tf_x_main: x[:,:self.n_main_features], tf_x_sec: x[:,-self.n_main_features:], tf_y: y}
-            opt, avg_loss = self.session.run([optimizer, loss], feed_dict=feed_dict)
-            self.training_cost.append(avg_loss)
-
+            feed_dict = {tf_x: x, tf_y: y}
+            opt = self.session.run(optimiser, feed_dict=feed_dict)
             self.tensorboard_logger.write_summary(self.session, feed_dict, i, 0)
 
         # Store the final portfolio weights
+        # TODO enable
         self._set_portfolio()
 
     # TODO this assumes that we actually construct a portfolio
     def _set_portfolio(self):
         self.portfolio = self.portfolio_weights.eval(session = self.session).flatten()
 
-    def _model(self, x_main, x_sec, weights, biases = None):
+    def _model(self, x, weights, biases = None):
         """
         Constructs the actual network.
 
@@ -713,73 +712,75 @@ class NN(BaseModel, Osprey):
         :rtype: tf.Variable of size (None, n_targets)
         """
 
-        # indices to keep track of the weights and biases
-        # since the various options obscures this
-        w_idx, b_idx = 0, 0
+        with tf.name_scope("model"):
+            # indices to keep track of the weights and biases
+            # since the various options obscures this
+            w_idx, b_idx = 0, 0
 
-        # Make the biases input
-        if self.bias_input:
-            # get the bias
-            b = tf.matmul(x_main, weights[w_idx], name = "input_bias")
-            w_idx += 1
-            # subtract the bias from the main features
-            main_inp = tf.subtract(x_main, b, name = "main_inp")
-        else:
-            main_inp = x_main
-
-        # TODO skip the concat step and work with x_main and
-        # x_sec separately
-        inp = tf.concat([x_main, x_sec], axis = 1)
-
-        if self.nhl == 0:
-            if self.multiplication_layer:
-                h = tf.matmul(inp, weights[w_idx]) + biases[b_idx]
-                b_idx += 1
-                w_idx += 1
-                if self.softmax:
-                    h = tf.nn.softmax(h)
-
-                self.portfolio_weights = h
-
-                z = tf.reduce_sum(x1 * h, axis = 1, name = "model")
+            # Make the biases input
+            if self.bias_input:
+                with tf.name_scope("bias_input"):
+                    # Get the main feature slice
+                    x_main = x[:,:self.n_main_features]
+                    # get the bias
+                    b = tf.matmul(x_main, weights[w_idx], name = "input_bias")
+                    w_idx += 1
+                    # subtract the bias from the main features
+                    x_main = tf.subtract(x_main, b, name = "x_main_biased")
+                    inp = tf.concat([x_main, x[:,self.n_main_features:]], axis = 1, name = "x_biased")
             else:
-                if self.softmax:
-                    w = tf.nn.softmax(weights[w_idx], axis = 0)
+                inp = x
+
+            if self.nhl == 0:
+                if self.multiplication_layer:
+                    h = tf.matmul(inp, weights[w_idx]) + biases[b_idx]
+                    b_idx += 1
+                    w_idx += 1
+                    if self.softmax:
+                        h = tf.nn.softmax(h)
+
+                    self.portfolio_weights = h
+
+                    z = tf.reduce_sum(x1 * h, axis = 1, name = "model")
                 else:
-                    w = weights[w_idx]
-                z = tf.matmul(inp, w, name = "model")
-                self.portfolio_weights = w
-                w_idx += 1
-        else:
-            if self.nhl >= 1:
-                h = self.activation_function(tf.matmul(inp, weights[w_idx]) + biases[b_idx])
-                b_idx += 1
-                w_idx += 1
-            if self.nhl >= 2:
-                h = self.activation_function(tf.matmul(h, weights[w_idx]) + biases[b_idx])
-                b_idx += 1
-                w_idx += 1
-            if self.nhl >= 3:
-                h = self.activation_function(tf.matmul(h, weights[w_idx]) + biases[b_idx])
-                b_idx += 1
-                w_idx += 1
-
-            if self.multiplication_layer:
-                h = tf.matmul(h, weights[w_idx]) + biases[b_idx]
-                b_idx += 1
-                w_idx += 1
-                if self.softmax:
-                    h = tf.nn.softmax(h)
-
-                self.portfolio_weights = h
-                z = tf.reduce_sum(x1 * h, axis = 1, name = "model")
+                    with tf.name_scope("Portfolio_dot_product"):
+                        if self.softmax:
+                            w = tf.nn.softmax(weights[w_idx], axis = 0, name = "softmax")
+                        else:
+                            w = weights[w_idx]
+                        z = tf.matmul(inp, w, name = "model")
+                    self.portfolio_weights = w
+                    w_idx += 1
             else:
-                z = tf.matmul(h, weights[w_idx], name = "model")
-                self.portfolio_weights = weights[w_idx]
-                w_idx += 1
+                if self.nhl >= 1:
+                    h = self.activation_function(tf.matmul(inp, weights[w_idx]) + biases[b_idx])
+                    b_idx += 1
+                    w_idx += 1
+                if self.nhl >= 2:
+                    h = self.activation_function(tf.matmul(h, weights[w_idx]) + biases[b_idx])
+                    b_idx += 1
+                    w_idx += 1
+                if self.nhl >= 3:
+                    h = self.activation_function(tf.matmul(h, weights[w_idx]) + biases[b_idx])
+                    b_idx += 1
+                    w_idx += 1
 
-        if self.fit_bias:
-            z = z+biases[b_idx]
+                if self.multiplication_layer:
+                    h = tf.matmul(h, weights[w_idx]) + biases[b_idx]
+                    b_idx += 1
+                    w_idx += 1
+                    if self.softmax:
+                        h = tf.nn.softmax(h)
+
+                    self.portfolio_weights = h
+                    z = tf.reduce_sum(x1 * h, axis = 1, name = "model")
+                else:
+                    z = tf.matmul(h, weights[w_idx], name = "model")
+                    self.portfolio_weights = weights[w_idx]
+                    w_idx += 1
+
+            if self.fit_bias:
+                z += biases[b_idx]
 
         return z
 
@@ -795,43 +796,44 @@ class NN(BaseModel, Osprey):
         weights = []
         biases = []
 
-        # Add a layer that basically calculates a weighted mean.
-        # Since some of the methods might be very bad, 
-        # this makes more sense than just using the mean
-        if self.bias_input:
-            weights.append(self._init_weight(self.n_main_features, 1, equal = True))
+        with tf.name_scope("weights"):
+            # Add a layer that basically calculates a weighted mean.
+            # Since some of the methods might be very bad, 
+            # this makes more sense than just using the mean
+            if self.bias_input:
+                weights.append(self._init_weight(self.n_main_features, 1, equal = True, name = "input_bias_weights"))
 
-        # Make the remaining weights in the network
-        if self.nhl == 0:
-            if self.multiplication_layer:
-                weights.append(self._init_weight(self.n_features,self.n_main_features))
-                biases.append(self.n_main_features)
+            # Make the remaining weights in the network
+            if self.nhl == 0:
+                if self.multiplication_layer:
+                    weights.append(self._init_weight(self.n_features,self.n_main_features, name = "multiplication_layer_weights"))
+                    biases.append(self._init_bias(self.n_main_features), name = "multiplication_layer_biases")
+                else:
+                    weights.append(self._init_weight(self.n_features, 1, equal = True, name = "weights_out"))
             else:
-                weights.append(self._init_weight(self.n_features, 1))
-        else:
-            if self.nhl >= 1:
-                weights.append(self._init_weight(self.n_features, self.hl1))
-                biases.append(self.hl1)
-            if self.nhl >= 2:
-                weights.append(self._init_weight(self.hl1, self.hl2))
-                biases.append(self.hl2)
-            if self.nhl >= 3:
-                weights.append(self._init_weight(self.hl2, self.hl3))
-                biases.append(self.hl3)
+                if self.nhl >= 1:
+                    weights.append(self._init_weight(self.n_features, self.hl1, name = "weights_in_hl1"))
+                    biases.append(self._init_bias(self.hl1))
+                if self.nhl >= 2:
+                    weights.append(self._init_weight(self.hl1, self.hl2))
+                    biases.append(self._init_bias(self.hl2))
+                if self.nhl >= 3:
+                    weights.append(self._init_weight(self.hl2, self.hl3))
+                    biases.append(self._init_bias(self.hl3))
 
-            if self.multiplication_layer:
-                weights.append(self._init_weight(weights[-1].shape[1],self.n_main_features))
-                biases.append(self.n_main_features)
-            else:
-                weights.append(self._init_weight(weights[-1].shape[1],1))
+                if self.multiplication_layer:
+                    weights.append(self._init_weight(weights[-1].shape[1],self.n_main_features))
+                    biases.append(self._init_bias(self.n_main_features))
+                else:
+                    weights.append(self._init_weight(weights[-1].shape[1],1))
 
 
-        if self.fit_bias:
-            biases.append(self._init_bias(1))
+            if self.fit_bias:
+                biases.append(self._init_bias(1))
 
         return weights, biases
 
-    def _loss(self, y_pred, y, weights, cost):
+    def _loss(self, y_pred, y, weights):
         """
         Constructs the loss function
 
@@ -841,33 +843,33 @@ class NN(BaseModel, Osprey):
         :type y: tf.placeholder of shape (None, 1)
         :param weights: Weights used in the network.
         :type weights: list of tf.Variable
-        :param cost: Computational cost of the main features
-        :type cost: tf.placeholder of shape (None, n_main_features)
         :return: loss
         :rtype: tf.Variable of size (1,)
         """
 
-        err = tf.square(tf.subtract(y,y_pred))
-        loss = tf.reduce_mean(err)
-        if self.l2_reg > 0:
-            l2_loss = self._l2_loss(weights)
-            loss += l2_loss
-        if self.cost_reg > 0:
-            cost_loss = self._cost_loss(weights, cost)
-            loss += l1_loss
+        with tf.name_scope("loss"):
+            with tf.name_scope("l2_loss"):
+                loss = tf.nn.l2_loss(y-y_pred)
+            if self.l2_reg > 0:
+                l2_reg = self._l2_loss(weights)
+                loss += l2_reg
+            if self.cost_reg > 0:
+                # TODO make this general
+                cost_reg = self._cost_loss()
+                loss += cost_reg
 
         return loss
 
-    def _init_weight(self, n1, n2, equal = False):
+    def _init_weight(self, n1, n2, equal = False, name = None):
         """
         Generate a tensor of weights of size (n1, n2)
 
         """
 
         if equal:
-            w = tf.Variable(np.ones((n1,n2), dtype=np.float32) / (n1 * n2))
+            w = tf.Variable(np.ones((n1,n2), dtype=np.float32) / (n1 * n2), name = name)
         else:
-            w = tf.Variable(tf.truncated_normal([n1,n2], stddev = 1.0 / np.sqrt(n2)))
+            w = tf.Variable(tf.truncated_normal([n1,n2], stddev = 1.0 / np.sqrt(n2)), name = name)
 
         return w
 
@@ -992,6 +994,14 @@ def run_SingleMethod(x,y, seed = None):
     #print("SingleMethod score:", score)
     return score
 
+def run_SingleMethod(x,y, seed = None):
+    if seed != None:
+        np.random.seed(seed)
+    m = SingleMethod(metric = "mae")
+    score = outer_cv(x, y, m)
+    #print("SingleMethod score:", score)
+    return score
+
 def reaction_dataframe_to_energies(df):
     # just to make sure that stuff is sorted
     # supress warning as this works like intended
@@ -1013,6 +1023,7 @@ def reaction_dataframe_to_energies(df):
 
     return energies, (energies - errors)[:,0]
 
+# TODO this can be done with a pipeline
 def outer_cv(x, y, m):
     """
     Do outer cross validation to get the prediction errors of a method. 
@@ -1037,10 +1048,17 @@ if __name__ == "__main__":
     df = pd.read_pickle(sys.argv[1])
     #df = df.loc[(df.basis == "SV-P") | (df.basis == "sto-3g") | (df.basis == "svp")]
     x, y = reaction_dataframe_to_energies(df)
+    # Set the cost to be the biggest reaction
+    cost = df[df.reaction == df.iloc[df.time.idxmax()].reaction].time.values
 
-    m = NN(tensorboard_dir = 'log', learning_rate = 0.3, iterations = 500)
+
+    m = NN(tensorboard_dir = 'log', learning_rate = 0.001, iterations = 50000, 
+            l2_reg = 1e-6, cost_reg = 1e-1, cost = cost)
     m.fit(x,y)
-    #print(np.where(m.portfolio > 0.01))
+    p = np.where(m.portfolio > 0.01)[0]
+    out = df[df.reaction == df.iloc[df.time.idxmax()].reaction].values[p][:,[0,3,-2]]
+
+    print(np.concatenate([out,m.portfolio[p,None]], axis=1))
 
     #print(run_SingleMethod(x,y, None))
 
