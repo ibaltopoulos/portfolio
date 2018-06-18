@@ -132,7 +132,6 @@ def plot_comparison(X, Y, xlabel = None, ylabel = None, filename = None):
     else:
         raise InputError("Wrong data type of variable 'filename'. Expected string")
 
-
 class TensorBoardLogger(object):
     """
     Helper class for tensorboard functionality
@@ -277,9 +276,10 @@ class BaseModel(object):
         raise NotImplementedError
 
     def score(self, x, y):
-        raise NotImplementedError
+        return self._score(x,y)
+        #raise NotImplementedError
 
-class NN(BaseModel, Osprey):
+class NN(BaseModel, BaseEstimator):#BaseModel, Osprey):
     """
     Neural network predictor.
 
@@ -483,12 +483,12 @@ class NN(BaseModel, Osprey):
 
     def _set_tensorboard(self, tensorboard_dir, store_frequency):
 
-        if tensorboard_dir == '':
+        if tensorboard_dir in ['', None]:
             self.tensorboard_logger = TensorBoardLogger(use_logger = False)
             return
 
         if not is_string(tensorboard_dir):
-            raise InputError('Expected string value for variable tensorboard_dir. Got %s' % str(self.tensorboard_dir))
+            raise InputError('Expected string value for variable tensorboard_dir. Got %s' % str(tensorboard_dir))
 
         if not is_positive_integer(store_frequency):
             raise InputError("Expected positive integer value for variable store_frequency. Got %s" % str(store_frequency))
@@ -611,10 +611,10 @@ class NN(BaseModel, Osprey):
         graph = tf.get_default_graph()
 
         with graph.as_default():
-            tf_x = graph.get_tensor_by_name("x:0")
-            model = graph.get_tensor_by_name("y:0")
+            tf_x = graph.get_tensor_by_name("Data/x:0")
+            model = graph.get_tensor_by_name("model/model:0")
             y_pred = self.session.run(model, feed_dict = {tf_x : x})
-        return y_pred
+        return y_pred.ravel()
 
     def fit(self, x, y):
         """
@@ -748,7 +748,7 @@ class NN(BaseModel, Osprey):
                             w = tf.nn.softmax(weights[w_idx], axis = 0, name = "softmax")
                         else:
                             w = weights[w_idx]
-                        z = tf.matmul(inp, w, name = "model")
+                    z = tf.matmul(inp, w, name = "model")
                     self.portfolio_weights = w
                     w_idx += 1
             else:
@@ -949,7 +949,7 @@ class NN(BaseModel, Osprey):
         rmse = np.sqrt(mean_squared_error(y, y_pred, sample_weight = sample_weight))
         return rmse
 
-class SingleMethod(BaseModel, BaseEstimator):
+class SingleMethod(BaseModel):
     """
     Selects the single best method.
     """
@@ -986,23 +986,25 @@ class SingleMethod(BaseModel, BaseEstimator):
     def predict(self, x):
         return x[:, self.idx]
 
-def run_SingleMethod(x,y, seed = None):
+def run_SingleMethod(x,y, cost = None, names = None, seed = None):
     if seed != None:
         np.random.seed(seed)
     m = SingleMethod(metric = "mae")
     score = outer_cv(x, y, m)
-    #print("SingleMethod score:", score)
+    print("SingleMethod score:", score)
     return score
 
-def run_SingleMethod(x,y, seed = None):
+def run_linear(x,y, cost = None, names = None, seed = None):
     if seed != None:
         np.random.seed(seed)
-    m = SingleMethod(metric = "mae")
+    m = NN(tensorboard_dir = 'log', learning_rate = 1e-1, iterations = 10000, 
+            l2_reg = 1e-6, cost_reg = 1e-9, cost = cost)
     score = outer_cv(x, y, m)
-    #print("SingleMethod score:", score)
+    print("Linear Model score:", score)
     return score
 
-def reaction_dataframe_to_energies(df):
+
+def parse_reaction_dataframe(df):
     # just to make sure that stuff is sorted
     # supress warning as this works like intended
     pd.options.mode.chained_assignment = None
@@ -1018,10 +1020,24 @@ def reaction_dataframe_to_energies(df):
         energies.append(sub_df.energy.tolist())
         errors.append(sub_df.error.tolist())
 
+        # get names of the methods
+        if idx == 0:
+            func = sub_df.functional.values
+            basis = sub_df.basis.values
+            unres = ['u-'*int(i) for i in sub_df.unrestricted]
+            names = [u + f + "/" + b for b,f,u in zip(basis,func,unres)]
+
+
     energies = np.asarray(energies, dtype = float)
     errors = np.asarray(errors, dtype = float)
+    
+    reference = (energies - errors)[:,0]
 
-    return energies, (energies - errors)[:,0]
+    # Set the cost to be the biggest reaction
+    cost = df[df.reaction == df.iloc[df.time.idxmax()].reaction].time.values
+
+
+    return energies, reference, cost, names
 
 # TODO this can be done with a pipeline
 def outer_cv(x, y, m):
@@ -1030,7 +1046,13 @@ def outer_cv(x, y, m):
     kwargs are a dictionary with options to the Portfolio class.
     """
 
-    cv_generator = sklearn.model_selection.RepeatedKFold(n_splits = 5, n_repeats = 5)
+    from sklearn.model_selection import cross_val_score, cross_validate
+    scores = cross_validate(m, x, y, cv=3)
+    print(scores)
+
+    quit()
+
+    cv_generator = sklearn.model_selection.RepeatedKFold(n_splits = 5, n_repeats = 2)
 
     errors = []
     for train_idx, test_idx in cv_generator.split(y):
@@ -1042,25 +1064,23 @@ def outer_cv(x, y, m):
         errors.extend(pred_y - test_y)
 
     errors = np.asarray(errors)
-    return np.sqrt(np.sum(errors**2)/errors.size)
+    return np.sqrt(np.sum(abs(errors))/errors.size)
 
 if __name__ == "__main__":
     df = pd.read_pickle(sys.argv[1])
     #df = df.loc[(df.basis == "SV-P") | (df.basis == "sto-3g") | (df.basis == "svp")]
-    x, y = reaction_dataframe_to_energies(df)
-    # Set the cost to be the biggest reaction
-    cost = df[df.reaction == df.iloc[df.time.idxmax()].reaction].time.values
+    x, y, cost, names = parse_reaction_dataframe(df)
 
+    #m = NN(tensorboard_dir = 'log', learning_rate = 0.001, iterations = 1000000, 
+    #        l2_reg = 1e-6, cost_reg = 1e-9, cost = cost)
+    #m.fit(x,y)
+    #quit()
+    #p = np.where(m.portfolio > 0.01)[0]
+    #out = df[df.reaction == df.iloc[df.time.idxmax()].reaction].values[p][:,[0,3,-2]]
+    #print(np.concatenate([out,m.portfolio[p,None]], axis=1))
 
-    m = NN(tensorboard_dir = 'log', learning_rate = 0.001, iterations = 50000, 
-            l2_reg = 1e-6, cost_reg = 1e-1, cost = cost)
-    m.fit(x,y)
-    p = np.where(m.portfolio > 0.01)[0]
-    out = df[df.reaction == df.iloc[df.time.idxmax()].reaction].values[p][:,[0,3,-2]]
-
-    print(np.concatenate([out,m.portfolio[p,None]], axis=1))
-
-    #print(run_SingleMethod(x,y, None))
+    #run_SingleMethod(x,y, None)
+    run_linear(x,y, cost, names, None)
 
     #def __init__(self, learning_rate = 0.3, iterations = 5000, cost_reg = 0.0, l2_reg = 0.0, 
     #        scoring_function = 'rmse', optimiser = "Adam", softmax = True, fit_bias = False,
