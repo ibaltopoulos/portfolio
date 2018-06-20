@@ -6,16 +6,19 @@ Generate data for paper
 import os, sys
 import pandas as pd
 import numpy as np
+import sklearn.model_selection
 
 # Add the module to source path
 dirname = os.path.dirname(os.path.realpath(__file__))
 source_path = dirname + "/portfolio"
 sys.path.append(source_path)
 
+from portfolio.model import SingleMethod, NN
+
 def run_SingleMethod(x,y, cost = None, names = None):
-    m = SingleMethod(metric = "mae")
+    m = SingleMethod(loss = 'mae')
     score = outer_cv(x, y, m)
-    print("SingleMethod score:", score)
+    print("SingleMethod score:", score, loss, scoring_function)
     return score
 
 def run_LinearModel(x,y, cost = None, names = None):
@@ -70,13 +73,13 @@ def outer_cv(x, y, m):
     kwargs are a dictionary with options to the Portfolio class.
     """
 
-    from sklearn.model_selection import cross_val_score, cross_validate
-    scores = cross_validate(m, x, y, cv=3)
-    print(scores)
+    #from sklearn.model_selection import cross_val_score, cross_validate
+    #scores = cross_validate(m, x, y, cv=3)
+    #print(scores)
 
-    quit()
+    #quit()
 
-    cv_generator = sklearn.model_selection.RepeatedKFold(n_splits = 5, n_repeats = 2)
+    cv_generator = sklearn.model_selection.RepeatedKFold(n_splits = 5, n_repeats = 10000)
 
     errors = []
     for train_idx, test_idx in cv_generator.split(y):
@@ -84,11 +87,9 @@ def outer_cv(x, y, m):
         test_x, test_y = x[test_idx], y[test_idx]
 
         m.fit(train_x, train_y)
-        pred_y = m.predict(test_x)
-        errors.extend(pred_y - test_y)
+        errors.append(m.score(test_x, test_y))
 
-    errors = np.asarray(errors)
-    return np.sqrt(np.sum(abs(errors))/errors.size)
+    return np.mean(errors)
 
 if __name__ == "__main__":
     df = pd.read_pickle(sys.argv[1])

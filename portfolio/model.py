@@ -8,8 +8,9 @@ import numpy as np
 import tensorflow as tf
 from sklearn.base import BaseEstimator
 from sklearn.utils.validation import check_X_y, check_array
-from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error
+from sklearn.metrics import mean_squared_error, mean_absolute_error
 #from inspect import signature
+from .utils import InputError, is_string
 
 
 class BaseModel(BaseEstimator):
@@ -17,12 +18,24 @@ class BaseModel(BaseEstimator):
     Base class for all predictive models.
 
     """
-    def __init__(self, **kwargs):
-        print(kwargs)
-        quit()
+    def __init__(self, scoring_function = 'root_mean_squared_error', **kwargs):
+        self._set_scoring_function(scoring_function)
         # Placeholder variables
         self.n_features = None
         self.n_samples = None
+
+        # There should be no arguments that is not named
+        if kwargs != {}:
+            raise InputError("Got unknown input %s to the class %s" % (kwargs, self.__class__.__name__))
+
+    def _set_scoring_function(self, scoring_function):
+        if not is_string(scoring_function):
+            raise InputError("Expected a string for variable 'scoring_function'. Got %s" % str(scoring_function))
+        if scoring_function.lower() not in ['mean_absolute_error', 'root_mean_squared_error', 'maximum_absolute_error',
+            'negative_mean_absolute_error', 'negative_mean_squared_error', 'negative_maximum_absolute_error']:
+            raise InputError("Unknown scoring functions '%s'" % str(scoring_function))
+
+        self.scoring_function = scoring_function
 
     def predict(self, x):
         raise NotImplementedError
@@ -30,9 +43,28 @@ class BaseModel(BaseEstimator):
     def fit(self, x, y):
         raise NotImplementedError
 
-    def score(self, x, y):
-        return self._score(x,y)
-        #raise NotImplementedError
+    def score(self, x, y, sample_weight = None):
+
+        y_pred = self.predict(x)
+
+        # Do it this way so that we can always extract multiple scores
+        self.score_mae = mean_absolute_error(y_pred, y, sample_weight)
+        self.score_rmsd = np.sqrt(mean_squared_error(y_pred, y, sample_weight))
+        self.score_max = max(abs(y_pred - y))
+
+        if self.scoring_function == 'mean_absolute_error':
+            return self.score_mae
+        elif self.scoring_function == 'root_mean_squared_error':
+            return self.score_rmsd
+        elif self.scoring_function == 'maximum_absolute_error':
+            return self.score_max
+        elif self.scoring_function == 'negative_mean_absolute_error':
+            return - self.score_mae
+        elif self.scoring_function == 'negative_mean_squared_error':
+            return - self.score_rmsd
+        elif self.scoring_function == 'negative_maximum_absolute_error':
+            return - self.score_max
+
 
 class NN(BaseModel):
     """
@@ -41,7 +73,7 @@ class NN(BaseModel):
     """
 
     def __init__(self, learning_rate = 0.3, iterations = 5000, cost_reg = 0.0, l2_reg = 0.0, 
-            scoring_function = 'rmse', optimiser = "Adam", softmax = True, fit_bias = False,
+            optimiser = "Adam", softmax = True, fit_bias = False,
             nhl = 0, hl1 = 5, hl2 = 5, hl3 = 5, multiplication_layer = False, activation_function = "sigmoid",
             bias_input = False, n_main_features = -1, single_thread = True, tensorboard_dir = '', 
             tensorboard_store_frequency = 100, cost = None, **kwargs):
@@ -90,12 +122,11 @@ class NN(BaseModel):
         """
 
         # Initialise parents
-        #super(self.__class__.__base__, self).__init__(**kwargs)
+        super(self.__class__, self).__init__(**kwargs)
         self._set_cost_reg(cost_reg)
         self._set_l2_reg(l2_reg)
         self._set_learning_rate(learning_rate)
         self._set_iterations(iterations)
-        self._set_scoring_function(scoring_function)
         self._set_optimiser(optimiser)
         self._set_softmax(softmax)
         self._set_fit_bias(fit_bias)
@@ -112,11 +143,6 @@ class NN(BaseModel):
 
         # Placeholder variables
         self.session = None
-
-        # There should be no arguments that is not named
-        if kwargs != {}:
-            raise InputError("Got unknown input %s to the class %s" % (kwargs, self.__class__.__name__))
-
 
 
     def _validate_options(self):
@@ -217,13 +243,6 @@ class NN(BaseModel):
             raise InputError("Expected positive integer value for variable iterations. Got %s" % str(iterations))
         self.iterations = int(iterations)
 
-    def _set_scoring_function(self, scoring_function):
-        if not is_string(scoring_function):
-            raise InputError("Expected a string for variable 'scoring_function'. Got %s" % str(scoring_function))
-        if scoring_function.lower() not in ['mae', 'rmse', 'r2']:
-            raise InputError("Available scoring functions are 'mae', 'rmse', 'r2'. Got %s" % str(scoring_function))
-
-        self.scoring_function = scoring_function
 
     def _set_optimiser(self, optimiser):
         try:
@@ -710,40 +729,48 @@ class NN(BaseModel):
         rmse = np.sqrt(mean_squared_error(y, y_pred, sample_weight = sample_weight))
         return rmse
 
-class SingleMethod(BaseModel):
+class lol(object):
+    def __init__(self):
+        pass
+
+class SingleMethod(BaseModel, lol):
     """
     Selects the single best method.
     """
 
-    def __init__(self, metric = "rmsd", **kwargs):
-        super(self.__class__.__base__, self).__init__(**kwargs)
-        self._set_metric(metric)
+    def __init__(self, loss = "rmsd", **kwargs):
+        super(self.__class__, self).__init__(**kwargs)
+        self._set_loss(loss)
         self.idx = None
         self.portfolio = None
 
-    def _set_metric(self, metric):
-        if metric in ["rmsd", "mae", "max"]:
-            self.metric = metric
+    def _set_loss(self, loss):
+        if loss in ["mae", "rmsd", "max"]:
+            self.loss = loss
+        else:
+            raise InputError("Got unknown value %s for parameter 'loss'" % str(loss))
 
     def fit(self, x, y):
         """
         Choose the single best method.
         """
 
-        if self.metric == "mae":
+        self.n_features = x.shape[1]
+        self.n_samples = x.shape[0]
+
+        if self.loss == "mae":
             acc = np.mean(abs(x - y[:,None]), axis=0)
-        elif self.metric == "rmsd":
+        elif self.loss == "rmsd":
             acc = np.sqrt(np.mean((x - y[:,None])**2, axis=0))
-        elif self.metric == "max":
+        elif self.loss == "max":
             acc = np.max(abs(x - y[:,None]), axis=0)
 
         self.idx = np.argmin(acc)
         self._set_portfolio()
 
     def _set_portfolio(self):
-        self.portfolio = np.zeros(x.shape[1])
+        self.portfolio = np.zeros(self.n_features)
         self.portfolio[self.idx] = 1
 
     def predict(self, x):
         return x[:, self.idx]
-
