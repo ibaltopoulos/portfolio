@@ -1,270 +1,25 @@
+"""
+Methods to create portfolios
+"""
 
 from __future__ import print_function
+import pickle, sys, os
 import numpy as np
-from sklearn.base import BaseEstimator
 import tensorflow as tf
-from inspect import signature
+from sklearn.base import BaseEstimator
 from sklearn.utils.validation import check_X_y, check_array
-import sklearn.model_selection
-import pickle
 from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error
-import pandas as pd
-import sys
-import os
-
-def is_positive(x):
-    return (not is_array_like(x) and _is_numeric(x) and x > 0)
-
-def is_positive_or_zero(x):
-    return (not is_array_like(x) and _is_numeric(x) and x >= 0)
-
-def is_array_like(x):
-    return isinstance(x, (tuple, list, np.ndarray))
-
-def is_positive_integer(x):
-    return (not is_array_like(x) and _is_integer(x) and x > 0)
-
-def is_string(x):
-    return isinstance(x, str)
-
-def _is_numeric(x):
-    return isinstance(x, (float, int))
-
-def _is_integer(x):
-    return (_is_numeric(x) and (float(x) == int(x)))
-
-def is_positive_integer_or_zero(x):
-    return (not is_array_like(x) and _is_integer(x) and x >= 0)
-
-def is_none(x):
-    return isinstance(x, type(None))
-
-def is_bool(x):
-    return isinstance(x, bool)
-
-def is_positive_array(x):
-    return (is_array_like(x) and (x>0).all())
-
-# custom exception to raise when we intentionally catch an error
-class InputError(Exception):
-    pass
-
-def plot_comparison(X, Y, xlabel = None, ylabel = None, filename = None):
-    """
-    Plots two sets of data against each other
-
-    :param X: First set of data points
-    :type X: array
-    :param Y: Second set of data points
-    :type Y: array
-    :param xlabel: Label for x-axis
-    :type xlabel: string
-    :param ylabel: Label for y-ayis
-    :type ylabel: string
-    :param filename: File to save the plot to. If '' the plot is shown instead of saved.
-                     If the dimensionality of y is higher than 1, the filename will be prefixed
-                     by the dimension.
-    :type filename: string
-
-    """
-    try:
-        import seaborn as sns
-        import matplotlib.pyplot as plt
-        from matplotlib import rc
-    except ModuleNotFoundError:
-        raise ModuleNotFoundError("Plotting functions require the modules 'seaborn' and 'matplotlib'")
-
-    # set matplotlib defaults
-    sns.set(font_scale=2.)
-    sns.set_style("whitegrid",{'grid.color':'.92','axes.edgecolor':'0.92'})
-    rc('text', usetex=False)
-
-    # convert to arrays
-    x = np.asarray(X)
-    y = np.asarray(Y)
-
-    # NOTE: If energy is not kcal/mol this might not be sensible
-    min_val = int(min(x.min(), y.min()) - 1)
-    max_val = int(max(x.max(), y.max()) + 1)
-
-    fig, ax = plt.subplots()
-
-    # Create the scatter plot
-    ax.scatter(x, y)
-
-    # Set limits
-    ax.set_xlim([min_val,max_val])
-    ax.set_ylim([min_val,max_val])
-
-    lims = [
-            np.min([ax.get_xlim(), ax.get_ylim()]),  # min of both axes
-            np.max([ax.get_xlim(), ax.get_ylim()]),  # max of both axes
-            ]
-
-    # now plot both limits against eachother
-    ax.plot(lims, lims, 'k--', alpha=0.75, zorder=0)
-    ax.set_aspect('equal')
-    ax.set_xlim(lims)
-    ax.set_ylim(lims)
-
-    # Set labels
-    if not is_none(xlabel):
-        if is_string(xlabel): 
-            ax.set_xlabel(xlabel)
-        else:
-            raise InputError("Wrong data type of variable 'xlabel'. Expected string, got %s" % str(xlabel))
-    if not is_none(ylabel):
-        if is_string(ylabel): 
-            ax.set_ylabel(ylabel)
-        else:
-            raise InputError("Wrong data type of variable 'ylabel'. Expected string, got %s" % str(ylabel))
-
-    if x.ndim != 1 or y.ndim != 1:
-        raise InputError("Input must be one dimensional")
-
-    # Plot or save
-    if is_none(filename):
-        plt.show()
-    elif is_string(filename):
-        if "." not in filename:
-            filename = filename + ".pdf"
-        plt.savefig(filename, pad_inches=0.0, bbox_inches = "tight", dpi = 300) 
-    else:
-        raise InputError("Wrong data type of variable 'filename'. Expected string")
-
-class TensorBoardLogger(object):
-    """
-    Helper class for tensorboard functionality
-    """
-
-    def __init__(self, use_logger = True, path = '', store_frequency = 1):
-        self.path = path
-        self.store_frequency = store_frequency
-        self.use_logger = use_logger
-
-    def initialise(self):
-        if self.use_logger == False:
-            return
-        # Create tensorboard directory
-        if not os.path.exists(self.path):
-            os.makedirs(self.path)
-
-        self.merged_summary = tf.summary.merge_all()
-        self.options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
-        self.options.output_partition_graphs = True
-        self.options.trace_level = tf.RunOptions.SOFTWARE_TRACE
-        self.run_metadata = tf.RunMetadata()
-
-    def set_summary_writer(self, sess):
-        if self.use_logger == False:
-            return
-        self.summary_writer = tf.summary.FileWriter(logdir=self.path, graph=sess.graph)
-
-    def write_summary(self, session, feed_dict, iteration, batch_no):
-        if (self.use_logger == False) or (iteration % self.store_frequency != 0):
-            return
-        # The options flag is needed to obtain profiling information
-        summary = session.run(self.merged_summary, feed_dict = feed_dict,
-                           options=self.options, run_metadata=self.run_metadata)
-        self.summary_writer.add_summary(summary, iteration)
-        self.summary_writer.add_run_metadata(self.run_metadata, 'iteration %d batch %d' % (iteration, batch_no))
-
-    def write_histogram(self, weights, biases):
-        if self.use_logger == False:
-            return
-        for i, weight in enumerate(weights):
-            tf.summary.histogram("weights_%d" % i, weights[i])
-        for i, weight in enumerate(biases):
-            tf.summary.histogram("biases_%d" % i, biases[i])
+#from inspect import signature
 
 
-    def write_scalar_summary(self, name, tensor):
-        tf.summary.scalar(name, tensor)
-
-class Osprey(BaseEstimator):
-    """
-    Overrides scikit-learn calls to make inheritance work in the 
-    Osprey bayesian optimisation package.
-    """
-
-    def __init__(self, **kwargs):
-        pass
-
-#    def get_params(self, deep = True):
-#        """
-#        Hack that overrides the get_params routine of BaseEstimator.
-#        self.get_params() returns the input parameters of __init__. However it doesn't
-#        handle inheritance well, as we would like to include the input parameters to
-#        __init__ of all the parents as well.
-#
-#        """
-#
-#        # First get the name of the class self belongs to
-#        base_class = self.__class__.__base__
-#
-#        # Then get names of the parents and their parents etc
-#        # excluding 'object'
-#        parent_classes = [c for c in base_class.__bases__ if c.__name__ not in "object"]
-#        # Keep track of whether new classes are added to parent_classes
-#        n = 0
-#        n_update = len(parent_classes)
-#        # limit to 10 generations to avoid infinite loops
-#        for i in range(10):
-#            for parent_class in parent_classes[n:]:
-#                parent_classes.extend([c for c in parent_class.__bases__ if 
-#                    (c.__name__ not in "object" and c not in parent_classes)])
-#            n = n_update
-#            n_update = len(parent_classes)
-#            if n == n_update:
-#                break
-#        else:
-#            print("Warning: Only included first 10 generations of parents of the called class")
-#
-#        params = BaseEstimator.get_params(self)
-#        for parent in names_of_parents:
-#            parent_init = (parent + ".__init__")
-#
-#            # Modified from the scikit-learn BaseEstimator class
-#            parent_init_signature = signature(parent_init)
-#            for p in (p for p in parent_init_signature.parameters.values() 
-#                    if p.name != 'self' and p.kind != p.VAR_KEYWORD):
-#                if p.name in params:
-#                    raise InputError('This should never happen')
-#                if hasattr(self, p.name):
-#                    params[p.name] = getattr(self, p.name)
-#                else:
-#                    params[p.name] = p.default
-#
-#        return params
-#
-#    def set_params(self, **params):
-#        """
-#        Hack that overrides the set_params routine of BaseEstimator.
-#
-#        """
-#        for key, value in params.items():
-#            key, delim, sub_key = key.partition('__')
-#
-#            if delim:
-#                nested_params[key][sub_key] = value
-#            else:
-#                setattr(self, key, value)
-#
-#        return self
-
-    def score(self, x, y = None):
-        # Osprey maximises a score per default, so return minus mae/rmsd and plus r2
-        if self.scoring_function == "r2":
-            return self._score(x, y)
-        else:
-            return - self._score(x, y)
-
-class BaseModel(object):
+class BaseModel(BaseEstimator):
     """
     Base class for all predictive models.
 
     """
     def __init__(self, **kwargs):
+        print(kwargs)
+        quit()
         # Placeholder variables
         self.n_features = None
         self.n_samples = None
@@ -279,7 +34,7 @@ class BaseModel(object):
         return self._score(x,y)
         #raise NotImplementedError
 
-class NN(BaseModel, BaseEstimator):#BaseModel, Osprey):
+class NN(BaseModel):
     """
     Neural network predictor.
 
@@ -335,7 +90,7 @@ class NN(BaseModel, BaseEstimator):#BaseModel, Osprey):
         """
 
         # Initialise parents
-        super(self.__class__.__base__, self).__init__(**kwargs)
+        #super(self.__class__.__base__, self).__init__(**kwargs)
         self._set_cost_reg(cost_reg)
         self._set_l2_reg(l2_reg)
         self._set_learning_rate(learning_rate)
@@ -357,6 +112,12 @@ class NN(BaseModel, BaseEstimator):#BaseModel, Osprey):
 
         # Placeholder variables
         self.session = None
+
+        # There should be no arguments that is not named
+        if kwargs != {}:
+            raise InputError("Got unknown input %s to the class %s" % (kwargs, self.__class__.__name__))
+
+
 
     def _validate_options(self):
         """
@@ -985,107 +746,4 @@ class SingleMethod(BaseModel):
 
     def predict(self, x):
         return x[:, self.idx]
-
-def run_SingleMethod(x,y, cost = None, names = None, seed = None):
-    if seed != None:
-        np.random.seed(seed)
-    m = SingleMethod(metric = "mae")
-    score = outer_cv(x, y, m)
-    print("SingleMethod score:", score)
-    return score
-
-def run_linear(x,y, cost = None, names = None, seed = None):
-    if seed != None:
-        np.random.seed(seed)
-    m = NN(tensorboard_dir = 'log', learning_rate = 1e-1, iterations = 10000, 
-            l2_reg = 1e-6, cost_reg = 1e-9, cost = cost)
-    score = outer_cv(x, y, m)
-    print("Linear Model score:", score)
-    return score
-
-
-def parse_reaction_dataframe(df):
-    # just to make sure that stuff is sorted
-    # supress warning as this works like intended
-    pd.options.mode.chained_assignment = None
-    df.sort_values(['functional', 'basis', 'unrestricted', 'reaction'])
-    pd.options.mode.chained_assignment = "warn"
-
-    unique_reactions = df.reaction.unique()
-
-    energies = []
-    errors = []
-    for idx, reac in enumerate(unique_reactions):
-        sub_df = df.loc[df.reaction == reac]
-        energies.append(sub_df.energy.tolist())
-        errors.append(sub_df.error.tolist())
-
-        # get names of the methods
-        if idx == 0:
-            func = sub_df.functional.values
-            basis = sub_df.basis.values
-            unres = ['u-'*int(i) for i in sub_df.unrestricted]
-            names = [u + f + "/" + b for b,f,u in zip(basis,func,unres)]
-
-
-    energies = np.asarray(energies, dtype = float)
-    errors = np.asarray(errors, dtype = float)
-    
-    reference = (energies - errors)[:,0]
-
-    # Set the cost to be the biggest reaction
-    cost = df[df.reaction == df.iloc[df.time.idxmax()].reaction].time.values
-
-
-    return energies, reference, cost, names
-
-# TODO this can be done with a pipeline
-def outer_cv(x, y, m):
-    """
-    Do outer cross validation to get the prediction errors of a method. 
-    kwargs are a dictionary with options to the Portfolio class.
-    """
-
-    from sklearn.model_selection import cross_val_score, cross_validate
-    scores = cross_validate(m, x, y, cv=3)
-    print(scores)
-
-    quit()
-
-    cv_generator = sklearn.model_selection.RepeatedKFold(n_splits = 5, n_repeats = 2)
-
-    errors = []
-    for train_idx, test_idx in cv_generator.split(y):
-        train_x, train_y = x[train_idx], y[train_idx]
-        test_x, test_y = x[test_idx], y[test_idx]
-
-        m.fit(train_x, train_y)
-        pred_y = m.predict(test_x)
-        errors.extend(pred_y - test_y)
-
-    errors = np.asarray(errors)
-    return np.sqrt(np.sum(abs(errors))/errors.size)
-
-if __name__ == "__main__":
-    df = pd.read_pickle(sys.argv[1])
-    #df = df.loc[(df.basis == "SV-P") | (df.basis == "sto-3g") | (df.basis == "svp")]
-    x, y, cost, names = parse_reaction_dataframe(df)
-
-    #m = NN(tensorboard_dir = 'log', learning_rate = 0.001, iterations = 1000000, 
-    #        l2_reg = 1e-6, cost_reg = 1e-9, cost = cost)
-    #m.fit(x,y)
-    #quit()
-    #p = np.where(m.portfolio > 0.01)[0]
-    #out = df[df.reaction == df.iloc[df.time.idxmax()].reaction].values[p][:,[0,3,-2]]
-    #print(np.concatenate([out,m.portfolio[p,None]], axis=1))
-
-    #run_SingleMethod(x,y, None)
-    run_linear(x,y, cost, names, None)
-
-    #def __init__(self, learning_rate = 0.3, iterations = 5000, cost_reg = 0.0, l2_reg = 0.0, 
-    #        scoring_function = 'rmse', optimiser = "Adam", softmax = True, fit_bias = False,
-    #        nhl = 0, hl1 = 5, hl2 = 5, hl3 = 5, multiplication_layer = False, activation_function = "sigmoid",
-    #        bias_input = False, n_main_features = -1, single_thread = True, tensorboard_dir = '', 
-    #        tensorboard_store_frequency = 100, **kwargs):
-
 
