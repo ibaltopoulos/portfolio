@@ -8,6 +8,8 @@ import pandas as pd
 import numpy as np
 import sklearn
 import sklearn.model_selection
+import pickle
+import matplotlib.pyplot as plt
 
 # Add the module to source path
 dirname = os.path.dirname(os.path.realpath(__file__))
@@ -18,16 +20,49 @@ from portfolio.model import SingleMethod, NN
 
 def run_SingleMethod(x,y, cost = None, names = None, classes = None):
     if os.path.isfile("pickles/single_method_results.pkl"):
+        print("single method results already generated")
         return
-    
+
+
     m = SingleMethod()
     params = {'loss': ('mae', 'rmsd', 'max')}
-    # Separate different classes
+    # Separate different classes and methods
     unique_classes = np.unique(classes)
-    for c in unique_classes:
-        idx = np.where(classes == c)[0]
-    errors, best_cv_params, cv_portfolios, final_portfolio, final_params = \
-            outer_cv(x[idx], y[idx], m, params)
+    unique_costs = np.unique(cost)
+    lol = []
+    lal = []
+    for cl in unique_classes:
+        for co in unique_costs:
+            class_idx = np.where(classes == cl)[0]
+            cost_idx = np.where(cost <= co)[0]
+            errors, best_cv_params, cv_portfolios, final_portfolio, final_params = \
+                    outer_cv(x[np.ix_(class_idx, cost_idx)], y[class_idx], m, params, a)
+            err = np.mean(errors, axis = 1)
+            assert(err.size == x.shape[0])
+            lol.append(np.mean(abs(err)))
+            lal.append(np.std(abs(err))/np.sqrt(err.size))
+    if isinstance(bla, type(None)):
+        bla = np.log(np.asarray(lol))
+        continue
+
+    print(a, np.sum(abs(np.log(np.asarray(lol)) - bla)))
+
+
+    #z = np.asarray(lal)/np.asarray(lol)
+    #print(np.mean(z), np.median(z), np.std(z))
+    #quit()
+
+    plt.plot(unique_costs, lol, 'o-')
+    plt.errorbar(unique_costs, lol, yerr = lal, fmt = 'o-')
+    plt.ylim([0.3,20])
+    plt.xscale('log')
+    plt.yscale('log')
+    plt.savefig("_".join(str(x) for x in a) + ".png")
+    plt.clf()
+    quit()
+
+    m.set_params(**final_params)
+    m.fit(x,y)
 
     d = {'errors': errors,
          'cv_params': best_cv_params,
@@ -80,7 +115,7 @@ def parse_reaction_dataframe(df):
 
     return energies, reference, cost, names, classes
 
-def outer_cv(x, y, m, params, grid = True):
+def outer_cv(x, y, m, params, a, grid = True):
     """
     Do outer cross validation to get the prediction errors of a method. 
     """
@@ -90,10 +125,10 @@ def outer_cv(x, y, m, params, grid = True):
     else:
         cv_model = sklearn.model_selection.RandomizedSearchCV
 
-    outer_cv_splits = 5
-    outer_cv_repeats = 1
-    inner_cv_splits = 3
-    inner_cv_repeats = 1
+    outer_cv_splits = a[0]
+    outer_cv_repeats = a[1]
+    inner_cv_splits = a[2]
+    inner_cv_repeats = a[3]
 
     outer_cv_generator = sklearn.model_selection.RepeatedKFold(
             n_splits = outer_cv_splits, n_repeats = outer_cv_repeats)
