@@ -686,48 +686,6 @@ class Portfolio(Estimators):
 
         return model.coef_, model.intercept_
 
-    def constrained_elastic_net(self, x = None, alpha = 0.0, init_weights = None):
-        """
-        Minimize x'(L+EE')x, where L is a constant times the identity matrix (l2 regularization),
-        E is the error of the training set and x is the portfolio weights.
-        The constraints sum(x) = 1 and x >= 0 is used.
-        """
-
-        if is_none(x):
-            x = self.x
-
-        ### objectives ###
-        P = cvxopt.matrix(x.T.dot(x) + alpha*np.identity(self.n_assets))
-        q = cvxopt.matrix(0.0, (self.n_assets,1))
-
-        #### constraints ###
-
-        # x >= 0
-        G = cvxopt.matrix(-np.identity(self.n_assets))
-        h = cvxopt.matrix(0.0, (self.n_assets, 1))
-
-
-        # sum(x) = 1
-        A = cvxopt.matrix(1.0, (1, self.n_assets))
-        b = cvxopt.matrix(1.0)
-
-        # suppress output
-        cvxopt.solvers.options['show_progress'] = False
-
-        # change defaults
-        #cvxopt.solvers.options['refinement'] = 5
-        #cvxopt.solvers.options['maxiters'] = 1000
-        #cvxopt.solvers.options['abstol'] = 1e-8
-        #cvxopt.solvers.options['reltol'] = 1e-7
-        #cvxopt.solvers.options['feastol'] = 1e-8
-
-        ### solve ###
-        if is_none(init_weights):
-            sol = cvxopt.solvers.qp(P, q, G, h, A, b)
-        else:
-            # warmstart
-            sol = cvxopt.solvers.qp(P, q, G, h, A, b, initvals = {'x':cvxopt.matrix(init_weights[:,None])})
-        return np.asarray(sol['x']).ravel()
 
     def constrained_elastic_net_cv(self):
         """
