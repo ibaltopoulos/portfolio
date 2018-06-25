@@ -16,7 +16,7 @@ dirname = os.path.dirname(os.path.realpath(__file__))
 source_path = dirname + "/portfolio"
 sys.path.append(source_path)
 
-from portfolio.model import SingleMethod, NN
+from portfolio.model import SingleMethod, NN, LinearModel
 
 def calc_mean_and_var(x):
     vars_ = np.var(x, ddof = 1, axis = 1)
@@ -134,8 +134,8 @@ def outer_cv(x, y, m, params, grid = True):
         cv_model = sklearn.model_selection.RandomizedSearchCV
 
     outer_cv_splits = 10
-    outer_cv_repeats = 3
-    inner_cv_splits = 5
+    outer_cv_repeats = 5
+    inner_cv_splits = 3
     inner_cv_repeats = 1
 
     outer_cv_generator = sklearn.model_selection.RepeatedKFold(
@@ -150,12 +150,19 @@ def outer_cv(x, y, m, params, grid = True):
     for i, (train_idx, test_idx) in enumerate(outer_cv_generator.split(y)):
         train_x, train_y = x[train_idx], y[train_idx]
         test_x, test_y = x[test_idx], y[test_idx]
-        cvmod = cv_model(m, param_grid = params, scoring = 'neg_mean_absolute_error',
-                return_train_score = False, cv = inner_cv_generator)
-        cvmod.fit(train_x, train_y)
-        cv_portfolios.append(cvmod.best_estimator_.portfolio)
-        best_cv_params.append(cvmod.best_params_)
-        y_pred = cvmod.predict(test_x)
+        if len(params) > 0:
+            cvmod = cv_model(m, param_grid = params, scoring = 'neg_mean_absolute_error',
+                    return_train_score = False, cv = inner_cv_generator)
+            cvmod.fit(train_x, train_y)
+            cv_portfolios.append(cvmod.best_estimator_.portfolio)
+            best_cv_params.append(cvmod.best_params_)
+            y_pred = cvmod.predict(test_x)
+        else:
+            m.fit(train_x, train_y)
+            cv_portfolios.append(m)
+            best_cv_params.append(params)
+            y_pred = m.predict(test_x)
+
         errors[test_idx, i // outer_cv_splits] = test_y - y_pred
 
     best_params = get_best_params(best_cv_params)
@@ -198,6 +205,19 @@ if __name__ == "__main__":
     df = pd.read_pickle("pickles/abde12_reac.pkl")
     # all but x,y is optional
     x, y, cost, names, rclass = parse_reaction_dataframe(df)
+    
+    m = LinearModel()
+    z = outer_cv(x,y,m,{})[0]
+    print(np.mean(abs(np.mean(z, axis = 1))))
+    #m.fit(x,y)
+    #print(np.sort(m.portfolio)[-5:])
+    #print(names[np.argmax(m.portfolio)])
+    quit()
+    m = NN(tensorboard_dir = '', learning_rate = 0.1, iterations = 50000,
+            l2_reg = 0, cost_reg = 0, cost = cost)
+    m.fit(x,y)
+    print(np.sort(m.portfolio)[-5:])
+    print(names[np.argmax(m.portfolio)])
 
     #m = NN(tensorboard_dir = 'log', learning_rate = 0.001, iterations = 1000000, 
     #        l2_reg = 1e-6, cost_reg = 1e-9, cost = cost)
@@ -207,7 +227,7 @@ if __name__ == "__main__":
     #out = df[df.reaction == df.iloc[df.time.idxmax()].reaction].values[p][:,[0,3,-2]]
     #print(np.concatenate([out,m.portfolio[p,None]], axis=1))
 
-    run_SingleMethod(x,y, cost, names, rclass)
+    #run_SingleMethod(x,y, cost, names, rclass)
     #run_linear(x,y, cost, names, None)
 
     #def __init__(self, learning_rate = 0.3, iterations = 5000, cost_reg = 0.0, l2_reg = 0.0, 
