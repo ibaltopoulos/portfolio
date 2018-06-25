@@ -85,3 +85,12 @@ def plot_comparison(X, Y, xlabel = None, ylabel = None, filename = None):
         plt.savefig(filename, pad_inches=0.0, bbox_inches = "tight", dpi = 300) 
     else:
         raise InputError("Wrong data type of variable 'filename'. Expected string")
+
+
+
+#plt.errorbar(unique_costs, lol, yerr = lal, fmt = 'o-')
+#plt.plot(unique_costs, lul, 'o-')
+#plt.ylim([0.3,20])
+#plt.xscale('log')
+#plt.yscale('log')
+#plt.show()

@@ -2,6 +2,8 @@
 TensorFlow / TensorBoard helper functions
 """
 
+import tensorflow as tf
+
 class TensorBoardLogger(object):
     """
     Helper class for tensorboard functionality

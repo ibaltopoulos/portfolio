@@ -10,7 +10,10 @@ from sklearn.base import BaseEstimator
 from sklearn.utils.validation import check_X_y, check_array
 from sklearn.metrics import mean_squared_error, mean_absolute_error
 #from inspect import signature
-from .utils import InputError, is_string
+from .utils import InputError, is_string, is_positive_or_zero, is_positive, \
+        is_positive_integer, is_positive_integer_or_zero, is_bool, is_none, \
+        is_positive_array
+from .tf_utils import TensorBoardLogger
 
 
 class BaseModel(BaseEstimator):
@@ -729,11 +732,7 @@ class NN(BaseModel):
         rmse = np.sqrt(mean_squared_error(y, y_pred, sample_weight = sample_weight))
         return rmse
 
-class lol(object):
-    def __init__(self):
-        pass
-
-class SingleMethod(BaseModel, lol):
+class SingleMethod(BaseModel):
     """
     Selects the single best method.
     """

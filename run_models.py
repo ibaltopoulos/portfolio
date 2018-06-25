@@ -10,6 +10,7 @@ import sklearn
 import sklearn.model_selection
 import pickle
 import matplotlib.pyplot as plt
+import copy
 
 # Add the module to source path
 dirname = os.path.dirname(os.path.realpath(__file__))
@@ -31,59 +32,185 @@ def run_SingleMethod(x,y, cost = None, names = None, classes = None):
 
 
     m = SingleMethod()
-    params = {'loss': ('mae', 'rmsd', 'max')}
+    cv_params = {'loss': ('mae', 'rmsd', 'max')}
     # Separate different classes and methods
     unique_classes = np.unique(classes)
     unique_costs = np.unique(cost)
-    z = 0
-    for i in range(10):
-        lol = []
-        lal = []
-        lul = []
-        for cl in unique_classes:
-            for co in unique_costs:
-                class_idx = np.where(classes == cl)[0]
-                cost_idx = np.where(cost <= co)[0]
-                errors, best_cv_params, cv_portfolios, final_portfolio, final_params = \
-                        outer_cv(x[np.ix_(class_idx, cost_idx)], y[class_idx], m, params)
-                err = errors #np.mean(errors, axis = 1)
-                m.set_params(loss = 'mae')
-                m.fit(x[np.ix_(class_idx, cost_idx)], y[class_idx])
-                lul.append(np.mean(abs(m.predict(x[np.ix_(class_idx, cost_idx)]) - y[class_idx])))
-                #assert(err.size == x.shape[0])
-                lol.append(np.mean(abs(err)))
-                lal.append(np.std(abs(err))/np.sqrt(err.size))
+
+    d = {}
+
+    for cl in unique_classes:
+        params = []
+        estimators = []
+        errors = []
+        cv_portfolios = []
+        portfolios = []
+        portfolio_weights = []
+        portfolio_names = []
+        maes = []
+        rmsds = []
+        maxerrs = []
+        sample_maes = []
+        sample_rmsds = []
+        laplace_mnll = []
+        gaussian_mnll = []
+        for co in unique_costs:
+            class_idx = np.where(classes == cl)[0]
+            cost_idx = np.where(cost <= co)[0]
+            # Get best hyperparams from cv
+            error, portfolio, best_params, cv_portfolio = \
+                    outer_cv(x[np.ix_(class_idx, cost_idx)], y[class_idx], m, cv_params)
+            # Train model with best hyperparams on full data
+            m.set_params(**best_params)
+            m.fit(x[np.ix_(class_idx, cost_idx)], y[class_idx])
+            # Get human readable details on the selected portfolio
+            portfolio_weight, portfolio_name = get_portfolio_details(portfolio, names)
+            # Get statistics
+            mae, rmsd, maxerr, sample_mae, sample_rmsd, nll_laplace, nll_gaussian = get_error_statistics(error)
+
+            # Store various attributes for the given cost
+            params.append(best_params)
+            estimators.append(copy.copy(m))
+            errors.append(error)
+            cv_portfolios.append(cv_portfolio)
+            portfolios.append(portfolio)
+            portfolio_weights.append(portfolio_weight)
+            portfolio_names.append(portfolio_name)
+            maes.append(mae)
+            rmsds.append(rmsd)
+            maxerrs.append(maxerr)
+            sample_maes.append(sample_mae)
+            sample_rmsds.append(sample_rmsd)
+            laplace_mnll.append(nll_laplace)
+            gaussian_mnll.append(nll_gaussian)
+
+        # Store various attributes for the given class
+        d[cl] = {'errors': errors,
+                 'cv_portfolios': cv_portfolios,
+                 'portfolios': portfolios,
+                 'params': params,
+                 'estimators': estimators,
+                 'cost': unique_costs,
+                 'portfolio_weights': portfolio_weights,
+                 'portfolio_names': portfolio_names,
+                 'maes': maes,
+                 'rmsds': rmsds,
+                 'maxerrs': maxerrs,
+                 'sample_maes': sample_maes,
+                 'sample_rmsds': sample_rmsds,
+                 'laplace_mnll': laplace_mnll,
+                 'gaussian_mnll': gaussian_mnll
+                 }
+    
+    # Dump the results in a pickle
+    with open("pickles/single_method_results.pkl", 'wb') as f:
+        pickle.dump(d, f, -1)
+
+def get_error_statistics(errors):
+
+    mae = np.mean(abs(errors))
+    rmsd = np.sqrt(np.mean(errors**2))
+    maxerr = np.max(abs(errors))
+
+    sample_mae = np.zeros(errors.size)
+    sample_rmsd = np.zeros(errors.size)
+    for idx, j in sklearn.model_selection.LeaveOneOut().split(errors):
+        sample_mae[j] = np.mean(abs(errors[idx]))
+        sample_rmsd[j] = np.sqrt(np.mean(errors[idx]**2))
+
+    nll_laplace = np.mean(np.log(2*sample_mae) + abs(errors) / sample_mae)
+    nll_gaussian = 0.5 * np.log(2 * np.pi) + np.mean(np.log(sample_rmsd) + errors**2 / sample_rmsd**2)
+
+    return  mae, rmsd, maxerr, sample_mae, sample_rmsd, nll_laplace, nll_gaussian
 
 
+def run_LinearModel(x,y, cost = None, names = None, classes = None):
+    if os.path.isfile("pickles/linear_method_results.pkl"):
+        print("Linear method results already generated")
+        return
 
-        z += np.sum(np.abs(np.log(np.asarray(lul)) - np.log(np.asarray(lol))))
-    print(z)
-    #print(np.mean(z), np.median(z), np.std(z))
-    #quit()
 
-    plt.errorbar(unique_costs, lol, yerr = lal, fmt = 'o-')
-    plt.plot(unique_costs, lul, 'o-')
-    plt.ylim([0.3,20])
-    plt.xscale('log')
-    plt.yscale('log')
-    plt.show()
-    quit()
+    m = NN(tensorboard_dir = '', learning_rate = 1e-1, iterations = 20000, 
+            l2_reg = 1e-6, cost_reg = 0, cost = cost) # cost_reg ~ (1e-6, 1e5) good start
 
-    m.set_params(**final_params)
+    cost_reg = [0] + [10**i for i in range(-6,5)]
     m.fit(x,y)
+    idx = np.argsort(m.portfolio)[-5:]
+    print(m.portfolio[idx], sum(m.portfolio > 1e-6))
+    quit()
+    cv_params = {'loss': ('mae', 'rmsd', 'max')}
+    # Separate different classes and methods
+    unique_classes = np.unique(classes)
+    unique_costs = np.unique(cost)
 
-    d = {'errors': errors,
-         'cv_params': best_cv_params,
-         'cv_portfolios': cv_portfolios,
-         'final_portfolio': final_portfolio,
-         'final_params': final_params}
+    d = {}
 
-def run_LinearModel(x,y, cost = None, names = None):
-    m = NN(tensorboard_dir = '', learning_rate = 1e-1, iterations = 10000, 
-            l2_reg = 1e-6, cost_reg = 1e-9, cost = cost, lol = 2)
-    score = outer_cv(x, y, m)
-    print("Linear Model score:", score)
-    return score
+    for cl in unique_classes:
+        params = []
+        estimators = []
+        errors = []
+        cv_portfolios = []
+        portfolios = []
+        portfolio_weights = []
+        portfolio_names = []
+        maes = []
+        rmsds = []
+        maxerrs = []
+        sample_maes = []
+        sample_rmsds = []
+        laplace_mnll = []
+        gaussian_mnll = []
+        for co in unique_costs:
+            class_idx = np.where(classes == cl)[0]
+            cost_idx = np.where(cost <= co)[0]
+            # Get best hyperparams from cv
+            error, portfolio, best_params, cv_portfolio = \
+                    outer_cv(x[np.ix_(class_idx, cost_idx)], y[class_idx], m, cv_params)
+            # Train model with best hyperparams on full data
+            m.set_params(**best_params)
+            m.fit(x[np.ix_(class_idx, cost_idx)], y[class_idx])
+            # Get human readable details on the selected portfolio
+            portfolio_weight, portfolio_name = get_portfolio_details(portfolio, names)
+            # Get statistics
+            mae, rmsd, maxerr, sample_mae, sample_rmsd, nll_laplace, nll_gaussian = get_error_statistics(error)
+
+            # Store various attributes for the given cost
+            params.append(best_params)
+            estimators.append(copy.copy(m))
+            errors.append(error)
+            cv_portfolios.append(cv_portfolio)
+            portfolios.append(portfolio)
+            portfolio_weights.append(portfolio_weight)
+            portfolio_names.append(portfolio_name)
+            maes.append(mae)
+            rmsds.append(rmsd)
+            maxerrs.append(maxerr)
+            sample_maes.append(sample_mae)
+            sample_rmsds.append(sample_rmsd)
+            laplace_mnll.append(nll_laplace)
+            gaussian_mnll.append(nll_gaussian)
+
+        # Store various attributes for the given class
+        d[cl] = {'errors': errors,
+                 'cv_portfolios': cv_portfolios,
+                 'portfolios': portfolios,
+                 'params': params,
+                 'estimators': estimators,
+                 'cost': unique_costs,
+                 'portfolio_weights': portfolio_weights,
+                 'portfolio_names': portfolio_names,
+                 'maes': maes,
+                 'rmsds': rmsds,
+                 'maxerrs': maxerrs,
+                 'sample_maes': sample_maes,
+                 'sample_rmsds': sample_rmsds,
+                 'laplace_mnll': laplace_mnll,
+                 'gaussian_mnll': gaussian_mnll
+                 }
+    
+    # Dump the results in a pickle
+    with open("pickles/single_method_results.pkl", 'wb') as f:
+        pickle.dump(d, f, -1)
 
 def parse_reaction_dataframe(df):
     # just to make sure that stuff is sorted
@@ -123,7 +250,27 @@ def parse_reaction_dataframe(df):
 
     return energies, reference, cost, names, classes
 
-def outer_cv(x, y, m, params, grid = True):
+def get_portfolio_details(x, names):
+
+    # Get the order by contribution of the portfolio
+    idx = np.argsort(x)
+
+    w = []
+    n = []
+    
+    for i in idx:
+        weight = x[i]
+        if weight < 1e-9:
+            continue
+        w.append(weight)
+        n.append(names[i])
+
+    return w, n
+
+
+
+def outer_cv(x, y, m, params, grid = True, 
+        outer_cv_splits = 3, outer_cv_repeats = 1, inner_cv_splits = 3, inner_cv_repeats = 1):
     """
     Do outer cross validation to get the prediction errors of a method. 
     """
@@ -133,11 +280,7 @@ def outer_cv(x, y, m, params, grid = True):
     else:
         cv_model = sklearn.model_selection.RandomizedSearchCV
 
-    outer_cv_splits = 10
-    outer_cv_repeats = 3
-    inner_cv_splits = 5
-    inner_cv_repeats = 1
-
+    # Set the cv generators
     outer_cv_generator = sklearn.model_selection.RepeatedKFold(
             n_splits = outer_cv_splits, n_repeats = outer_cv_repeats)
     inner_cv_generator = sklearn.model_selection.RepeatedKFold(
@@ -153,18 +296,24 @@ def outer_cv(x, y, m, params, grid = True):
         cvmod = cv_model(m, param_grid = params, scoring = 'neg_mean_absolute_error',
                 return_train_score = False, cv = inner_cv_generator)
         cvmod.fit(train_x, train_y)
-        cv_portfolios.append(cvmod.best_estimator_.portfolio)
         best_cv_params.append(cvmod.best_params_)
+        cv_portfolios.append(cvmod.best_estimator_.portfolio)
         y_pred = cvmod.predict(test_x)
         errors[test_idx, i // outer_cv_splits] = test_y - y_pred
 
+    # Get the best params
     best_params = get_best_params(best_cv_params)
 
+    # retrain the model on the full data
     m.set_params(**best_params)
     m.fit(x, y)
     final_portfolio = m.portfolio
 
-    return errors, best_cv_params, cv_portfolios, final_portfolio, best_params
+    errors = np.mean(errors, axis = 1)
+
+    cv_portfolios = np.asarray(cv_portfolios)
+
+    return errors, final_portfolio, best_params, cv_portfolios
 
 def get_best_params(params):
     """
@@ -208,7 +357,7 @@ if __name__ == "__main__":
     #print(np.concatenate([out,m.portfolio[p,None]], axis=1))
 
     run_SingleMethod(x,y, cost, names, rclass)
-    #run_linear(x,y, cost, names, None)
+    run_LinearModel(x,y, cost, names, rclass)
 
     #def __init__(self, learning_rate = 0.3, iterations = 5000, cost_reg = 0.0, l2_reg = 0.0, 
     #        scoring_function = 'rmse', optimiser = "Adam", softmax = True, fit_bias = False,
