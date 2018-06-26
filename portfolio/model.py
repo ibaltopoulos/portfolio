@@ -13,7 +13,6 @@ from sklearn.metrics import mean_squared_error, mean_absolute_error
 from .utils import InputError, is_string, is_none, is_positive_or_zero, is_positive, \
         is_positive_integer, is_positive_integer_or_zero, is_bool, is_positive_array
 from .tf_utils import TensorBoardLogger
-import cvxopt
 import cvxpy
 
 
@@ -247,7 +246,6 @@ class NN(BaseModel):
             raise InputError("Expected positive integer value for variable iterations. Got %s" % str(iterations))
         self.iterations = int(iterations)
 
-
     def _set_optimiser(self, optimiser):
         try:
             optimiser = optimiser().get_name()
@@ -289,7 +287,7 @@ class NN(BaseModel):
             self.cost = None
             return
         elif not is_positive_array(cost):
-            raise InputError("Expected boolean for variable single_thread. Got %s" % str(single_thread))
+            raise InputError("Expected array of positive values for variable cost. Got %s" % str(cost))
 
         self.cost = np.asarray(cost, dtype = float)
 
@@ -781,88 +779,116 @@ class LinearModel(BaseModel):
     """
 
     # TODO add cost
-    def __init__(self, l2_reg = 0, **kwargs):
+    def __init__(self, l2_reg = 0, positive_constraint = True, sum_constraint = True, 
+            clip_value = 0, cost = None, cost_reg = 0, **kwargs):
         super(self.__class__, self).__init__(**kwargs)
 
         self._set_l2_reg(l2_reg)
         self.portfolio = None
+        self._set_positive_constraint(positive_constraint)
+        self._set_sum_constraint(sum_constraint)
+        self._set_clip_value(clip_value)
+        self._set_cost(cost)
+        self._set_cost_reg(cost_reg)
+
+    def _set_positive_constraint(self, x):
+        if not is_bool(x):
+            raise InputError("Expected boolean value for parameter 'positive_constraint'. Got %s" % str(x))
+        self.positive_constraint = bool(x)
+
+    def _set_sum_constraint(self, x):
+        if not is_bool(x):
+            raise InputError("Expected boolean value for parameter 'sum_constraint'. Got %s" % str(x))
+        self.sum_constraint = bool(x)
 
     def _set_l2_reg(self, x):
         if not is_positive_or_zero(x):
-            raise InputError("Expected positive numeric value for parameter 'l2_reg'. Got % s" % str(x))
+            raise InputError("Expected positive numeric value for parameter 'l2_reg'. Got %s" % str(x))
         self.l2_reg = float(x)
 
-    def fit(self, x, y):
-        # TODO put clipping and iterative refinement in here
-        return self._fit2(x,y)
+    def _set_clip_value(self, x):
+        if not is_positive_or_zero(x):
+            raise InputError("Expected positive numeric value for parameter 'clip_value'. Got %s" % str(x))
+        self.clip_value = float(x)
 
-    def _fit2(self, x, y, init_weights = None):
+    def _set_cost(self, cost):
+        if is_none(cost):
+            self.cost = None
+            return
+        elif not is_positive_array(cost):
+            raise InputError("Expected array of positive values for variable cost. Got %s" % str(cost))
+
+        self.cost = np.asarray(cost, dtype = float)
+
+    def _set_cost_reg(self, cost_reg):
+        if not is_positive_or_zero(cost_reg):
+            raise InputError("Expected positive float value for variable 'cost_reg'. Got %s" % str(cost_reg))
+        self.cost_reg = cost_reg
+
+    def fit(self, x, y):
+        w = None
+        # Max do 10 clipping refinements
+        for i in range(10):
+            if is_none(w):
+                idx = None
+            else:
+                idx = np.where(abs(w) > self.clip_value)[0]
+                if len(idx) == 0:
+                    break
+            w = self._fit(x, y, idx = idx)
+            if ((w > self.clip_value) | (w < 1e-12)).all():
+                break
+
+        self._set_portfolio(w)
+
+        #print(w[np.where(w > self.clip_value)[0]])
+        #quit()
+
+    def _fit(self, X, y, idx = None, init_weights = None):
         """
         Minimize |w'x - y|^2, where w is the portfolio weights.
-        The constraints sum(x) = 1 and x >= 0 is used.
+        The constraints sum(x) = 1 and x >= 0 is optionally used
         """
+
+        if is_none(idx):
+            x = X
+            cost = self.cost
+        else:
+            x = X[:, idx]
+            cost = self.cost[idx]
 
         self.n_samples = x.shape[0]
         self.n_features = x.shape[1]
 
         w = cvxpy.Variable(self.n_features)
         A = cvxpy.Constant(np.ones((1, self.n_features)))
-        objective = cvxpy.Minimize(cvxpy.sum_squares(x * w - y) / self.n_samples + 
-                self.l2_reg * cvxpy.sum_squares(w))
-        #objective = cvxpy.Minimize(cvxpy.quad_over_lin(x * w - y, self.n_samples))
-        constraints = [w >= 0, cvxpy.sum(w) == 1]
+        # Set objective
+        obj_fun = cvxpy.sum_squares(x * w - y) / self.n_samples
+        if self.l2_reg > 0:
+            obj_fun += self.l2_reg * cvxpy.sum_squares(w)
+        if self.cost_reg > 0 and not is_none(self.cost):
+            if not self.positive_constraint:
+                raise NotImplementedError("Cost constraints only work with positive constraint in this model")
+            # Could also set this as a constraint
+            obj_fun += self.cost_reg * cvxpy.sum(w * cost)
+        objective = cvxpy.Minimize(obj_fun)
+        # Set constraints
+        constraints = []
+        if self.positive_constraint:
+            constraints.append(w >= 0)
+        if self.sum_constraint:
+            constraints.append(cvxpy.sum(w) == 1)
         prob = cvxpy.Problem(objective, constraints)
-        help(cvxpy.OSPQ)
-        quit()
-        result = prob.solve(solver = cvxpy.OSPQ())
-        # Proper: CPLEX, ECOS, ECOS_BB
+        result = prob.solve(solver = "ECOS")
+        # Proper: (CPLEX), ECOS, ECOS_BB
         # violate constraints: OSPQ
 
-        self._set_portfolio(w.value)
-
-    def _fit(self, x, y, init_weights = None):
-        """
-        Minimize |w'x - y|^2, where w is the portfolio weights.
-        The constraints sum(x) = 1 and x >= 0 is used.
-        """
-
-        self.n_samples = x.shape[0]
-        self.n_features = x.shape[1]
-
-        ### objectives ###
-        P = cvxopt.matrix(2 * x.T.dot(x))
-        q = cvxopt.matrix(-2.0 * x.T.dot(y[:,None]))
-
-        #### constraints ###
-
-        # x >= 0
-        G = cvxopt.matrix(-np.identity(self.n_features))
-        h = cvxopt.matrix(0.0, (self.n_features, 1))
-
-
-        # sum(x) = 1
-        A = cvxopt.matrix(1.0, (1, self.n_features))
-        b = cvxopt.matrix(1.0)
-
-        # suppress output
-        cvxopt.solvers.options['show_progress'] = False
-
-        # change defaults
-        #cvxopt.solvers.options['refinement'] = 5
-        #cvxopt.solvers.options['maxiters'] = 1000
-        #cvxopt.solvers.options['abstol'] = 1e-8
-        #cvxopt.solvers.options['reltol'] = 1e-7
-        #cvxopt.solvers.options['feastol'] = 1e-8
-
-        ### solve ###
-        if is_none(init_weights):
-            sol = cvxopt.solvers.qp(P, q, G, h, A, b)
+        if is_none(idx):
+            return w.value
         else:
-            # warmstart
-            sol = cvxopt.solvers.qp(P, q, G, h, A, b, initvals = {'x':cvxopt.matrix(init_weights[:,None])})
-
-        # Store the results
-        self._set_portfolio(np.asarray(sol['x']).ravel())
+            W = np.zeros(X.shape[1])
+            W[idx] = w.value
+            return W
 
     def _set_portfolio(self, w):
         self.portfolio = w

@@ -245,8 +245,12 @@ def parse_reaction_dataframe(df):
     reference = (energies - errors)[:,0]
 
     # Set the cost to be the biggest reaction
-    cost = df[df.reaction == df.iloc[df.time.idxmax()].reaction].time.values
-
+    # This is convoluted since simpler solutions
+    # disregard that df might be a subset of another
+    # DataFrame
+    idx = np.zeros(df.index.max()+1, dtype = int)
+    idx[df.index.values] = np.arange(df.index.values.size)
+    cost = df[df.reaction == df.iloc[idx[df.time.idxmax()]].reaction].time.values
 
     return energies, reference, cost, names, classes
 
@@ -315,6 +319,12 @@ def outer_cv(x, y, m, params, grid = True,
     m.fit(x, y)
     final_portfolio = m.portfolio
 
+    # Since the repeats of the same sample is correlated, it's
+    # probably better to take the mean of them before doing
+    # summary statistics.
+    # This means that we're actually using slightly more than (m-1)/m
+    # of the data, where m is the number of CV folds.
+    # But since we're not doing learning curves, this should be fine.
     errors = np.mean(errors, axis = 1)
 
     cv_portfolios = np.asarray(cv_portfolios)
@@ -354,12 +364,10 @@ if __name__ == "__main__":
     # all but x,y is optional
     x, y, cost, names, rclass = parse_reaction_dataframe(df)
     
-    m = LinearModel()
-    z = outer_cv(x,y,m,{})[0]
-    print(np.mean(abs(np.mean(z, axis = 1))))
-    #m.fit(x,y)
-    #print(np.sort(m.portfolio)[-5:])
-    #print(names[np.argmax(m.portfolio)])
+    m = LinearModel(clip_value = 1e-3, cost = cost, cost_reg = 0)
+    z, w = outer_cv(x,y,m,{}, True, 10, 5, 5, 1)[:2]
+    print(names[w.argmax()])
+    print(np.mean(abs(z)))
     quit()
     m = NN(tensorboard_dir = '', learning_rate = 0.1, iterations = 50000,
             l2_reg = 0, cost_reg = 0, cost = cost)
