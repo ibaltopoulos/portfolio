@@ -363,9 +363,10 @@ if __name__ == "__main__":
     df = pd.read_pickle("pickles/abde12_reac.pkl")
     # all but x,y is optional
     x, y, cost, names, rclass = parse_reaction_dataframe(df)
-    
-    m = LinearModel(clip_value = 1e-3, cost = cost, cost_reg = 0)
-    z, w = outer_cv(x,y,m,{}, True, 10, 5, 5, 1)[:2]
+
+    m = LinearModel(clip_value = 1e-2, cost = cost, cost_reg = 0, positive_constraint = False, sum_constraint = True)
+    z, w = outer_cv(x,y,m,{}, True, 5, 5, 5, 1)[:2]
+    print(w[(w>1e-3) | (w<-1e-3)])
     print(names[w.argmax()])
     print(np.mean(abs(z)))
     quit()

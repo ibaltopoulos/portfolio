@@ -2,34 +2,59 @@ import numpy as np
 import glob
 import pandas as pd
 import sys
-#import matplotlib.pyplot as plt
 
 
 def data_parse(filename):
     """
     Opens a molpro output file and parses the energy and computation time.
-    Could be extended to get out more information.
     """
-    time, energy = None, None
+
     with open(filename) as f:
         lines = f.readlines()
-        try:
-            # uCCSD has multiple output.
-            energy = float(lines[-3].split()[0])
-        except:
-            return None, None
+        if "KS" in lines[-4:][0]:
+            return parse_dft(lines)
+        print(filename)
+        quit()
 
-        for line in lines[-3::-1]:
-            if "CPU TIMES" in line:
-                time = float(line.split()[3])
-                if "uCCSD" not in filename:
-                    break
-            if "F12b" in line:
-                energy = float(line.split()[-1])
-                break
-        else:
-            return None, None
-        return energy, time
+#    time, energy = None, None
+#    with open(filename) as f:
+#        try:
+#            # uCCSD has multiple output.
+#            energy = float(lines[-3].split()[0])
+#        except:
+#            return None, None
+#
+#        for line in lines[-3::-1]:
+#            if "CPU TIMES" in line:
+#                time = float(line.split()[3])
+#                if "uCCSD" not in filename:
+#                    break
+#            if "F12b" in line:
+#                energy = float(line.split()[-1])
+#                break
+#        else:
+#            return None, None
+#        return energy, time
+
+
+def parse_dft(lines):
+    energy = float(lines[-3].split()[0])
+    e1 = None
+    e2 = None
+    dfe = None
+    time = None
+    for line in lines[-3::-1]:
+        if "CPU TIMES" in line:
+            time = float(line.split()[3])
+        elif "One-electron energy" in line:
+            e1 = float(line.split()[2])
+            # Since this is the last to be read
+            break
+        elif "Two-electron energy" in line:
+            e2 = float(line.split()[2])
+        elif "Density functional" in line:
+            dfe = float(line.split()[2])
+    return energy, time, e1, e2, dfe
 
 def is_none(x):
     """
@@ -64,7 +89,10 @@ def parse_molpro(filenames, data_set):
     timings = []
     for filename in filenames:
         # Parse the data files
-        energy, time = data_parse(filename)
+        energy, time, e1, e2, dfe = data_parse(filename)
+        print(energy, time, e1, e2, dfe)
+        continue
+        quit()
         # skip if the calculation has failed
         if energy == None:
             continue
@@ -92,6 +120,7 @@ def parse_molpro(filenames, data_set):
         unrestricted_flags.append(unrestricted)
         energies.append(energy)
         timings.append(time)
+    quit()
 
     # hartree to kcal/mol
     energies = np.asarray(energies) * 627.509
@@ -227,7 +256,7 @@ def parse_reactions(reaction_filename, df):
         dfr = dfr.append(df_reaction[df_reaction.functional != 'uCCSD'], ignore_index = True)
     return dfr
 
-def make_pickles(data_set_name, data_set_path = "../portfolio_datasets/", pickle_path = "pickles/"):
+def make_pickles(data_set_name, data_set_path = "../../portfolio_datasets/", pickle_path = "../pickles/"):
     """
     Create the pandas dataframe pickles if the don't already exist.
     """
@@ -242,6 +271,7 @@ def make_pickles(data_set_name, data_set_path = "../portfolio_datasets/", pickle
     except FileNotFoundError:
         filenames = glob.glob(path + "/*.out")
         mol_df = parse_molpro(filenames, data_set_name)
+        quit()
         ## SOGGA11 doesn't converge for hydrogen
         #mol_df = mol_df.loc[(mol_df.functional != "SOGGA11") & (mol_df.functional != "SOGGA11-X")]
         print_missing(mol_df, data_set_name)
@@ -310,11 +340,9 @@ def main():
     Create all the reaction pickles
     """
     abde12_reac = make_pickles("abde12")
-    df = abde12_reac
-    df = df.loc[(df.functional == "M06-2X") & (df.basis == "avtz") & (df.unrestricted == True)]
-    print(df[["reaction", "energy"]])
-    quit()
     nhtbh38_reac = make_pickles("nhtbh38")
+    htbh38_reac = make_pickles("htbh38")
+    quit()
 
     # combine
     df = abde12_reac.append(nhtbh38_reac, ignore_index = True)
