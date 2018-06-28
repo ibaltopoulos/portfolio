@@ -3,7 +3,6 @@ import glob
 import pandas as pd
 import sys
 
-
 def data_parse(filename):
     """
     Opens a molpro output file and parses the energy and computation time.
@@ -11,50 +10,143 @@ def data_parse(filename):
 
     with open(filename) as f:
         lines = f.readlines()
-        if "KS" in lines[-4:][0]:
-            return parse_dft(lines)
-        print(filename)
-        quit()
+        if "DCSD" in filename:
+            # ccsd tends to crash with H since there's only one electron
+            if filename.split("/")[-1].startswith("H-_"):
+                data = parse_dcsd(lines, True)
+            else:
+                data =  parse_dcsd(lines)
+        elif "luCCSD" in filename:
+            if filename.split("/")[-1].startswith("H-_"):
+                data = parse_luccsd(lines, True)
+            else:
+                data =  parse_luccsd(lines)
+        elif "_uCCSD" in filename:
+            data =  parse_uccsd(lines)
 
-#    time, energy = None, None
-#    with open(filename) as f:
-#        try:
-#            # uCCSD has multiple output.
-#            energy = float(lines[-3].split()[0])
-#        except:
-#            return None, None
-#
-#        for line in lines[-3::-1]:
-#            if "CPU TIMES" in line:
-#                time = float(line.split()[3])
-#                if "uCCSD" not in filename:
-#                    break
-#            if "F12b" in line:
-#                energy = float(line.split()[-1])
-#                break
-#        else:
-#            return None, None
-#        return energy, time
+        elif "lrmp2" in filename:
+            data = parse_lrmp2(lines)
+        elif "KS" in lines[-4:][0]:
+            data = parse_dft(lines)
+        else:
+            if filename in ["../../portfolio_datasets//abde12/tBu-OCH3_D3B3LYP5_qzvp_u.out",
+                            "../../portfolio_datasets//abde12/tBu-OCH3_D3PBE0_qzvp_u.out",
+                            "../../portfolio_datasets//abde12/tBu-OCH3_dcLDA_qzvp_u.out"]:
+                return 0, "a", "a", "a", "a", "a", "a", "a", "a", "a"
+            print(filename)
+            quit()
 
+    # Parse the filename
+    filename_data = filename_parse(filename)
+    return (*data, *filename_data)
+
+def parse_lrmp2(lines):
+    e1 = None
+    e2 = None
+    ce = None
+    time = None
+    for i, line in enumerate(lines[-3::-1]):
+        if "DF-LRMP2" in line or "HF-SCF" in line:
+            energy = float(lines[-3-i+1].split()[0])
+        elif "CPU TIMES" in line:
+            time = float(line.split()[3])
+        elif "LRMP2 correlation energy" in line:
+            ce = float(line.split()[3])
+        elif "Two-electron energy" in line:
+            e2 = float(line.split()[2])
+        elif "One-electron energy" in line:
+            e1 = float(line.split()[2])
+            # Since this is the last to be read
+            break
+
+    return energy, time, e1, e2, ce
+
+def parse_uccsd(lines):
+    # We only care about the energy of the reference
+    e1 = None
+    e2 = None
+    ce = None
+    time = None
+    energy = None
+    for line in lines[-3::-1]:
+        if "!RHF-UCCSD(T)-F12b energy" in line:
+            energy = float(line.split()[2])
+            break
+    return energy, time, e1, e2, ce
+
+def parse_luccsd(lines, single_atom = False):
+    e1 = None
+    e2 = None
+    ce = None
+    time = None
+    for i, line in enumerate(lines[-3::-1]):
+        if "LUCCSD(T)-F12" in line:
+            energy = float(lines[-3-i+1].split()[0])
+        elif "CPU TIMES" in line:
+            time = float(line.split()[3])
+        elif "!RHF STATE 1.1 Energy" in line:
+            if single_atom:
+                energy = float(line.split()[4])
+            ce = energy - float(line.split()[4])
+            # Since this is the last to be read
+            break
+        elif "Two-electron energy" in line:
+            e2 = float(line.split()[2])
+        elif "One-electron energy" in line:
+            e1 = float(line.split()[2])
+
+    return energy, time, e1, e2, ce
+
+def parse_dcsd(lines, single_atom = False):
+    """
+    Many ugly fixes to make sure single atom
+    calculations gets read correctly.
+    """
+    e1 = None
+    e2 = None
+    ce = None
+    time = None
+    if not single_atom:
+        energy = float(lines[-3].split()[0])
+    if single_atom:
+        ce = 0
+
+    for line in lines[-3::-1]:
+        if "!RHF STATE 1.1 Energy" in line and single_atom:
+            energy = float(line.split()[4])
+            break
+        elif "CPU TIMES" in line:
+            time = float(line.split()[3])
+        elif "DCSD correlation energy" in line:
+            ce = float(line.split()[3])
+        elif "Two-electron energy" in line:
+            e2 = float(line.split()[2])
+        elif "One-electron energy" in line:
+            e1 = float(line.split()[2])
+            if not single_atom:
+                break
+
+
+    return energy, time, e1, e2, ce
 
 def parse_dft(lines):
     energy = float(lines[-3].split()[0])
     e1 = None
     e2 = None
-    dfe = None
+    ce = None
     time = None
     for line in lines[-3::-1]:
         if "CPU TIMES" in line:
             time = float(line.split()[3])
+        elif "Density functional" in line:
+            ce = float(line.split()[2])
+        elif "Two-electron energy" in line:
+            e2 = float(line.split()[2])
         elif "One-electron energy" in line:
             e1 = float(line.split()[2])
             # Since this is the last to be read
             break
-        elif "Two-electron energy" in line:
-            e2 = float(line.split()[2])
-        elif "Density functional" in line:
-            dfe = float(line.split()[2])
-    return energy, time, e1, e2, dfe
+    return energy, time, e1, e2, ce
 
 def is_none(x):
     """
@@ -72,39 +164,54 @@ def filename_parse(filename):
     mol = tokens[0]
     func = tokens[1]
     basis = tokens[2].split(".")[0]
-    unrestricted = (len(tokens) == 4)
+    name = func + "/" + basis
+    if func in ['rDCSD', 'df-lrmp2']:
+        unrestricted = False
+    elif func in ['luCCSD', 'uCCSD', 'uDCSD']:
+        unrestricted = True
+    else:
+        unrestricted = (len(tokens) == 4)
+        name = "u" * unrestricted + "-" + name
 
-    return mol, func, basis, unrestricted
+
+    return mol, func, basis, unrestricted, name
 
 def parse_molpro(filenames, data_set):
     """
     Parse data from all filenames. data_set is used to create file output.
     """
 
+    names = []
     molecules = []
     functionals = []
     basis_sets = []
     unrestricted_flags = []
     energies = []
     timings = []
+    oneelectron = []
+    twoelectron = []
+    correlation = []
     for filename in filenames:
         # Parse the data files
-        energy, time, e1, e2, dfe = data_parse(filename)
-        print(energy, time, e1, e2, dfe)
-        continue
-        quit()
+        energy, time, e1, e2, ce, mol, func, basis, unrestricted, name = \
+                data_parse(filename)
         # skip if the calculation has failed
-        if energy == None:
-            continue
-        # Parse the filename
-        mol, func, basis, unrestricted = filename_parse(filename)
+        if None in [energy, time, e1, e2, ce] and '_uCCSD' not in filename \
+            or is_none(energy):
+            print(energy, time, e1, e2, ce, filename)
+            quit()
 
         # Special case for abde12 due to redundancy in the 
         # naming of the files
         if data_set == "abde12":
             # redundancy in the dataset
-            if mol == 'C2H6':
-                mol = 'Et-H'
+            if mol == 'Et-H':
+                mol = 'C2H6'
+            elif mol == "OCH3-":
+                mol = "CH3O"
+            elif mol == "tBu-H":
+                mol = "C4H10"
+
             # Remove trailing -
             if mol[-1] == "-":
                 mol = mol[:-1]
@@ -114,25 +221,35 @@ def parse_molpro(filenames, data_set):
         if func.lower() in ['sogga11','sogga11-x']:
             continue
 
+        names.append(name)
         molecules.append(mol)
         functionals.append(func)
         basis_sets.append(basis)
         unrestricted_flags.append(unrestricted)
         energies.append(energy)
         timings.append(time)
-    quit()
+        oneelectron.append(e1)
+        twoelectron.append(e2)
+        correlation.append(ce)
 
     # hartree to kcal/mol
     energies = np.asarray(energies) * 627.509
 
-    d = {"molecule": molecules,
-            "functional": functionals,
-            "basis": basis_sets,
-            "unrestricted": unrestricted_flags,
-            "energy": energies,
-            "time": timings}
+    d = {"name": names,
+         "molecule": molecules,
+         "functional": functionals,
+         "basis": basis_sets,
+         "unrestricted": unrestricted_flags,
+         "energy": energies,
+         "time": timings,
+         "one-electron_energy": oneelectron,
+         "two-electron_energy": twoelectron,
+         "correlation_energy": correlation}
     
     df = pd.DataFrame.from_dict(d)
+
+    # TODO remove dft methods that are the same
+    quit()
 
     # Remove duplicates
     pd.DataFrame.drop_duplicates(df, inplace=True, subset=['functional', 'molecule','basis','unrestricted'])

@@ -4,14 +4,14 @@
 # sixths is reference energy in kcal/mol if known
 # 1: dissociation (one species dissociates to two)
 C2H6O, CH3O CH3, 1, 0, 1, 89.79
-Et-H, CH3 CH3, 1, 0, 1, 97.39
-Et-H, Et H, 1, 0, 1, 108.92
+C2H6, CH3 CH3, 1, 0, 1, 97.39
+C2H6, Et H, 1, 0, 1, 108.92
 C4H10O, CH3O iPr, 1, 0, 1, 91.51
 C4H10, CH3 iPr, 1, 0, 1, 95.00
 Et-CH3, CH3 Et, 1, 0, 1, 95.89
 EtOCH3, Et CH3O, 1, 0, 1, 95.26
 EtOH, Et OH, 1, 0, 1, 100.29
 tBu-CH3, CH3 tBu, 1, 0, 1, 93.67
-tBu-H, tBu H, 1, 0, 1, 103.86
+C4H10, tBu H, 1, 0, 1, 103.86
 tBu-OCH3, tBu CH3O, 1, 0, 1, 89.27
 tBu-OH, tBu OH, 1, 0, 1, 115.02
