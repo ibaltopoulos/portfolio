@@ -362,7 +362,7 @@ if __name__ == "__main__":
     # all but x,y is optional
     x, y, cost, names, rclass = parse_reaction_dataframe(df)
 
-    m = Markowitz(clip_value = 1e-3, cost = cost, cost_reg = 1e-2, positive_constraint = True, method = 'min_expected_squared_loss')
+    m = LinearModel(clip_value = 1e-3, cost = cost, cost_reg = 1e-2, positive_constraint = True)
     z, w = outer_cv(x,y,m,{}, True, 5, 5, 5, 1)[:2]
     print(w[(w>1e-3) | (w<-1e-3)])
     print(names[w.argmax()])
