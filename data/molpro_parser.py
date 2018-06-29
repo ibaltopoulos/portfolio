@@ -8,33 +8,36 @@ def data_parse(filename):
     Opens a molpro output file and parses the energy and computation time.
     """
 
-    with open(filename) as f:
-        lines = f.readlines()
-        if "DCSD" in filename:
-            # ccsd tends to crash with H since there's only one electron
-            if filename.split("/")[-1].startswith("H-_"):
-                data = parse_dcsd(lines, True)
-            else:
-                data =  parse_dcsd(lines)
-        elif "luCCSD" in filename:
-            if filename.split("/")[-1].startswith("H-_"):
-                data = parse_luccsd(lines, True)
-            else:
-                data =  parse_luccsd(lines)
-        elif "_uCCSD" in filename:
-            data =  parse_uccsd(lines)
+    try:
+        with open(filename) as f:
+            lines = f.readlines()
+            if "DCSD" in filename:
+                # ccsd tends to crash with H since there's only one electron
+                if filename.split("/")[-1].startswith("H-_") \
+                    or filename.split("/")[-1].startswith("H_"):
+                    data = parse_dcsd(lines, True)
+                else:
+                    data =  parse_dcsd(lines)
+            elif "luCCSD" in filename:
+                if filename.split("/")[-1].startswith("H-_") \
+                    or filename.split("/")[-1].startswith("H_"):
+                    data = parse_luccsd(lines, True)
+                else:
+                    data =  parse_luccsd(lines)
+            elif "_uCCSD" in filename:
+                data =  parse_uccsd(lines)
 
-        elif "lrmp2" in filename:
-            data = parse_lrmp2(lines)
-        elif "KS" in lines[-4:][0]:
-            data = parse_dft(lines)
-        else:
-            if filename in ["../../portfolio_datasets//abde12/tBu-OCH3_D3B3LYP5_qzvp_u.out",
-                            "../../portfolio_datasets//abde12/tBu-OCH3_D3PBE0_qzvp_u.out",
-                            "../../portfolio_datasets//abde12/tBu-OCH3_dcLDA_qzvp_u.out"]:
-                return 0, "a", "a", "a", "a", "a", "a", "a", "a", "a"
-            print(filename)
-            quit()
+            elif "lrmp2" in filename:
+                data = parse_lrmp2(lines)
+            elif "KS" in lines[-4:][0]:
+                data = parse_dft(lines)
+            else:
+                print(filename)
+                quit()
+    except:
+        print(filename)
+        return
+
 
     # Parse the filename
     filename_data = filename_parse(filename)
@@ -160,6 +163,10 @@ def filename_parse(filename):
     It is assumed that u-pbe/avtz on hcn will be named
     hnc_pbe_avtz_u.xxx, where xxx is an arbitrary extension.
     """
+
+    # Since SV-P is misspelled as SV-P_, catch that
+    filename = filename.replace("SV-P_", "SV-P")
+
     tokens = filename.split("/")[-1].split("_")
     mol = tokens[0]
     func = tokens[1]
@@ -172,6 +179,9 @@ def filename_parse(filename):
     else:
         unrestricted = (len(tokens) == 4)
         name = "u" * unrestricted + "-" + name
+
+    if func in ['rDCSD', 'uDCSD']:
+        func = 'DCSD'
 
 
     return mol, func, basis, unrestricted, name
@@ -193,8 +203,11 @@ def parse_molpro(filenames, data_set):
     correlation = []
     for filename in filenames:
         # Parse the data files
-        energy, time, e1, e2, ce, mol, func, basis, unrestricted, name = \
-                data_parse(filename)
+        args = data_parse(filename)
+        # Continue if parsing fails
+        if is_none(args):
+            continue
+        energy, time, e1, e2, ce, mol, func, basis, unrestricted, name = args
         # skip if the calculation has failed
         if None in [energy, time, e1, e2, ce] and '_uCCSD' not in filename \
             or is_none(energy):
@@ -216,11 +229,6 @@ def parse_molpro(filenames, data_set):
             if mol[-1] == "-":
                 mol = mol[:-1]
 
-        # The SOGGA11 and SOGGA11-X functionals didn't converge for hydrogen
-        # And was removed from the set
-        if func.lower() in ['sogga11','sogga11-x']:
-            continue
-
         names.append(name)
         molecules.append(mol)
         functionals.append(func)
@@ -231,6 +239,9 @@ def parse_molpro(filenames, data_set):
         oneelectron.append(e1)
         twoelectron.append(e2)
         correlation.append(ce)
+
+    print("quit after fileparse")
+    quit()
 
     # hartree to kcal/mol
     energies = np.asarray(energies) * 627.509
@@ -245,11 +256,9 @@ def parse_molpro(filenames, data_set):
          "one-electron_energy": oneelectron,
          "two-electron_energy": twoelectron,
          "correlation_energy": correlation}
-    
+
     df = pd.DataFrame.from_dict(d)
 
-    # TODO remove dft methods that are the same
-    quit()
 
     # Remove duplicates
     pd.DataFrame.drop_duplicates(df, inplace=True, subset=['functional', 'molecule','basis','unrestricted'])
@@ -270,24 +279,79 @@ def parse_molpro(filenames, data_set):
             # The CCSD is only unrestricted and has the same basis.
             if func == 'uCCSD':
                 sub = df.loc[(df.molecule == mol) & (df.functional == func)]
-                if sub.size == 0:
+                if sub.shape[0] == 0:
                     missing_mols.append(mol)
                     missing_functional.append(func)
                     missing_basis.append(basis)
                     missing_unrestricted.append(False)
-                elif sub.size != 6:
-                    quit("Missed something")
+                elif sub.shape[0] != 1:
+                    quit(("Missed something", func, mol))
                 continue
             for basis in unique_basis:
+                # The lCCSD is only unrestricted and doesn't have all basis sets
+                if func == 'luCCSD':
+                    if basis in ['sto-3g', 'SV-P']:
+                        continue
+                    sub = df.loc[(df.molecule == mol) & (df.functional == func) & (df.basis == basis)]
+                    if sub.shape[0] == 0:
+                        missing_mols.append(mol)
+                        missing_functional.append(func)
+                        missing_basis.append(basis)
+                        missing_unrestricted.append(False)
+                    elif sub.shape[0] != 1:
+                        quit(("Missed something", func, mol, basis))
+                    continue
+                # The df-lrmp2 is only restricted.
+                if func == 'df-lrmp2':
+                    if basis in ['sto-3g', 'SV-P']:
+                        continue
+                    sub = df.loc[(df.molecule == mol) & (df.functional == func) & (df.basis == basis)]
+                    if sub.shape[0] == 0:
+                        missing_mols.append(mol)
+                        missing_functional.append(func)
+                        missing_basis.append(basis)
+                        missing_unrestricted.append(True)
+                    elif sub.shape[0] != 1:
+                        quit(("Missed something", func, mol, basis))
+                    continue
                 for unres in True, False:
+                    # The DCSD only have select basis sets.
+                    if func == 'DCSD':
+                        if basis in ['qzvp', 'avtz', 'tzvp', 'avdz']:
+                            continue
+                        sub = df.loc[(df.molecule == mol) & (df.functional == func) & (df.basis == basis) & (df.unrestricted == unres)]
+                        if sub.shape[0] == 0:
+                            missing_mols.append(mol)
+                            missing_functional.append(func)
+                            missing_basis.append(basis)
+                            missing_unrestricted.append(True)
+                        elif sub.shape[0] != 1:
+                            quit(("Missed something", func, mol, basis, unres))
+                        continue
                     sub = df.loc[(df.molecule == mol) & (df.functional == func) & (df.basis == basis) & (df.unrestricted == unres)]
-                    if sub.size == 0:
+                    if sub.shape[0] == 0:
                         missing_mols.append(mol)
                         missing_functional.append(func)
                         missing_basis.append(basis)
                         missing_unrestricted.append(unres)
-                    elif sub.size != 6:
-                        quit("Missed something")
+                    elif sub.shape[0] != 1:
+                        quit(("Missed something", func, mol, basis, unres, sub.size))
+
+    #e = []
+    #names = []
+
+    #for func in df.functional.unique():
+    #    df2 = df[(df.functional == func) & (df.molecule == 'CH3O') & (df.basis == 'qzvp')]
+    #    e.append(df2.energy.values)
+    #    names.append(df2.name.values)
+
+    #e = np.asarray(e)
+    #c = np.corrcoef(e.T)
+    #for i in range(c.shape[0]):
+    #    for j in range(i+1, c.shape[0]):
+    #        if c == 1:
+    #            print(names[i],names[j])
+    #quit()
 
 
     d = {"molecule": missing_mols,
@@ -300,7 +364,7 @@ def parse_molpro(filenames, data_set):
 
     df2 = pd.DataFrame.from_dict(d)
 
-    df = df.append(df2, ignore_index = True)
+    df = df.append(df2, ignore_index = True, sort = False)
 
     return df
 
@@ -388,11 +452,9 @@ def make_pickles(data_set_name, data_set_path = "../../portfolio_datasets/", pic
     except FileNotFoundError:
         filenames = glob.glob(path + "/*.out")
         mol_df = parse_molpro(filenames, data_set_name)
-        quit()
-        ## SOGGA11 doesn't converge for hydrogen
-        #mol_df = mol_df.loc[(mol_df.functional != "SOGGA11") & (mol_df.functional != "SOGGA11-X")]
         print_missing(mol_df, data_set_name)
         mol_df.to_pickle(mol_df_name)
+    return
 
 
     # Try to read the reaction pickle, else make it.
@@ -400,6 +462,7 @@ def make_pickles(data_set_name, data_set_path = "../../portfolio_datasets/", pic
         reac_df = pd.read_pickle(reac_df_name)
     except FileNotFoundError:
         reac_df = parse_reactions(data_set_name + "_reactions", mol_df)
+        quit()
         reac_df['dataset'] = data_set_name
         set_median_timings(reac_df)
         reac_df.to_pickle(reac_df_name)
@@ -456,8 +519,8 @@ def main():
     """
     Create all the reaction pickles
     """
-    abde12_reac = make_pickles("abde12")
-    nhtbh38_reac = make_pickles("nhtbh38")
+    #abde12_reac = make_pickles("abde12")
+    #nhtbh38_reac = make_pickles("nhtbh38")
     htbh38_reac = make_pickles("htbh38")
     quit()
 
