@@ -178,11 +178,10 @@ def filename_parse(filename):
         unrestricted = True
     else:
         unrestricted = (len(tokens) == 4)
-        name = "u" * unrestricted + "-" + name
+        name = "u-" * unrestricted + name
 
     if func in ['rDCSD', 'uDCSD']:
         func = 'DCSD'
-
 
     return mol, func, basis, unrestricted, name
 
@@ -212,7 +211,7 @@ def parse_molpro(filenames, data_set):
         if None in [energy, time, e1, e2, ce] and '_uCCSD' not in filename \
             or is_none(energy):
             print(energy, time, e1, e2, ce, filename)
-            quit()
+            continue
 
         # Special case for abde12 due to redundancy in the 
         # naming of the files
@@ -240,8 +239,7 @@ def parse_molpro(filenames, data_set):
         twoelectron.append(e2)
         correlation.append(ce)
 
-    print("quit after fileparse")
-    quit()
+    unrestricted = np.asarray(unrestricted, dtype = bool)
 
     # hartree to kcal/mol
     energies = np.asarray(energies) * 627.509
@@ -253,12 +251,12 @@ def parse_molpro(filenames, data_set):
          "unrestricted": unrestricted_flags,
          "energy": energies,
          "time": timings,
-         "one-electron_energy": oneelectron,
-         "two-electron_energy": twoelectron,
+         "one_electron_energy": oneelectron,
+         "two_electron_energy": twoelectron,
          "correlation_energy": correlation}
 
     df = pd.DataFrame.from_dict(d)
-
+    # Convert to bool since pandas assume bool are int
 
     # Remove duplicates
     pd.DataFrame.drop_duplicates(df, inplace=True, subset=['functional', 'molecule','basis','unrestricted'])
@@ -270,6 +268,7 @@ def parse_molpro(filenames, data_set):
     # Do a sanity check on everything and make
     # sure that every combination of methods exist
     # The missing ones are given an energy of None
+    missing_names = []
     missing_mols = []
     missing_functional = []
     missing_basis = []
@@ -280,6 +279,7 @@ def parse_molpro(filenames, data_set):
             if func == 'uCCSD':
                 sub = df.loc[(df.molecule == mol) & (df.functional == func)]
                 if sub.shape[0] == 0:
+                    missing_names.append('uCCSD/avtz')
                     missing_mols.append(mol)
                     missing_functional.append(func)
                     missing_basis.append(basis)
@@ -294,6 +294,7 @@ def parse_molpro(filenames, data_set):
                         continue
                     sub = df.loc[(df.molecule == mol) & (df.functional == func) & (df.basis == basis)]
                     if sub.shape[0] == 0:
+                        missing_names.append('luCCSD/' + basis)
                         missing_mols.append(mol)
                         missing_functional.append(func)
                         missing_basis.append(basis)
@@ -307,6 +308,7 @@ def parse_molpro(filenames, data_set):
                         continue
                     sub = df.loc[(df.molecule == mol) & (df.functional == func) & (df.basis == basis)]
                     if sub.shape[0] == 0:
+                        missing_names.append('df-lrmp2/' + basis)
                         missing_mols.append(mol)
                         missing_functional.append(func)
                         missing_basis.append(basis)
@@ -321,6 +323,7 @@ def parse_molpro(filenames, data_set):
                             continue
                         sub = df.loc[(df.molecule == mol) & (df.functional == func) & (df.basis == basis) & (df.unrestricted == unres)]
                         if sub.shape[0] == 0:
+                            missing_names.append('u-'*unres + func + '/' + basis)
                             missing_mols.append(mol)
                             missing_functional.append(func)
                             missing_basis.append(basis)
@@ -330,6 +333,7 @@ def parse_molpro(filenames, data_set):
                         continue
                     sub = df.loc[(df.molecule == mol) & (df.functional == func) & (df.basis == basis) & (df.unrestricted == unres)]
                     if sub.shape[0] == 0:
+                        missing_names.append('u-'*unres + func + '/' + basis)
                         missing_mols.append(mol)
                         missing_functional.append(func)
                         missing_basis.append(basis)
@@ -337,30 +341,17 @@ def parse_molpro(filenames, data_set):
                     elif sub.shape[0] != 1:
                         quit(("Missed something", func, mol, basis, unres, sub.size))
 
-    #e = []
-    #names = []
-
-    #for func in df.functional.unique():
-    #    df2 = df[(df.functional == func) & (df.molecule == 'CH3O') & (df.basis == 'qzvp')]
-    #    e.append(df2.energy.values)
-    #    names.append(df2.name.values)
-
-    #e = np.asarray(e)
-    #c = np.corrcoef(e.T)
-    #for i in range(c.shape[0]):
-    #    for j in range(i+1, c.shape[0]):
-    #        if c == 1:
-    #            print(names[i],names[j])
-    #quit()
-
-
-    d = {"molecule": missing_mols,
-            "functional": missing_functional,
-            "basis": missing_basis,
-            "unrestricted": missing_unrestricted,
-            "energy": [None]*len(missing_mols),
-            "time": [None]*len(missing_mols)
-            }
+    d = {"name": missing_names,
+         "molecule": missing_mols,
+         "functional": missing_functional,
+         "basis": missing_basis,
+         "unrestricted": missing_unrestricted,
+         "energy": [None]*len(missing_mols),
+         "time": [None]*len(missing_mols), 
+         "one_electron_energy": [None]*len(missing_mols),
+         "two_electron_energy": [None]*len(missing_mols),
+         "correlation_energy": [None]*len(missing_mols)
+         }
 
     df2 = pd.DataFrame.from_dict(d)
 
@@ -378,8 +369,8 @@ def print_missing(df, name):
         print(missing)
 
 def parse_reactions(reaction_filename, df):
-    """
-    Create the reactions described in reaction_filename, from the parsed molecules.
+    """.
+    Cre.ate the reactions described in reaction_filename, from the parsed molecules.
     """
     # Sort so the order for the reactions are correct
     df.sort_values(['functional', 'basis', 'unrestricted', 'molecule'], inplace=True)
@@ -388,6 +379,10 @@ def parse_reactions(reaction_filename, df):
     # rename molecule to reaction
     dfr.rename(index=str, columns={'molecule':'reaction'}, inplace=True)
     mol_list = df.molecule.unique().tolist()
+
+    # Store reaction energies from reaction files to make sure our reference is mostly correct.
+    reference_energies = []
+
     # Open the reaction file
     with open(reaction_filename) as f:
         lines = f.readlines()
@@ -397,7 +392,8 @@ def parse_reactions(reaction_filename, df):
             continue
 
         # Parse each reaction
-        reactants, products, main_class, sub_class = line.split(",")
+        reactants, products, rtype, charge, spin, reference = line.split(",")
+        reference_energies.append(float(reference))
         reactants = reactants.split()
         products = products.split()
         for i in reactants + products:
@@ -408,33 +404,44 @@ def parse_reactions(reaction_filename, df):
         # Make a dataframe for this reaction
         df_reaction = df.loc[df.molecule == reactants[0]].copy()
         df_reaction.rename(index=str, columns = {'molecule':'reaction'}, inplace=True)
-        # set energy and time to 0 makes the next part a bit easier
+        # set energies and time to 0 makes the next part a bit easier
         df_reaction.energy = 0
+        df_reaction.one_electron_energy = 0
+        df_reaction.two_electron_energy = 0
+        df_reaction.correlation_energy = 0
         df_reaction.time = 0
         # Add up the time cost and energy of the reaction for all methods
         df_reaction['reaction'] = pd.Series([reaction_name]*(len(df_reaction.energy.tolist())), index=df_reaction.index) 
         for reactant in reactants:
-            df_reaction.energy -= df.loc[df.molecule == reactant].energy.as_matrix()
-            df_reaction.time += df.loc[df.molecule == reactant].time.as_matrix()
+            df_reaction.energy -= df.loc[df.molecule == reactant].energy.values
+            df_reaction.one_electron_energy -= df.loc[df.molecule == reactant].one_electron_energy.values
+            df_reaction.two_electron_energy -= df.loc[df.molecule == reactant].two_electron_energy.values
+            df_reaction.correlation_energy -= df.loc[df.molecule == reactant].correlation_energy.values
+            df_reaction.time += df.loc[df.molecule == reactant].time.values
         for product in products:
-            df_reaction.energy += df.loc[df.molecule == product].energy.as_matrix()
-            df_reaction.time += df.loc[df.molecule == product].time.as_matrix()
+            df_reaction.energy += df.loc[df.molecule == product].energy.values
+            df_reaction.one_electron_energy -= df.loc[df.molecule == product].one_electron_energy.values
+            df_reaction.two_electron_energy -= df.loc[df.molecule == product].two_electron_energy.values
+            df_reaction.correlation_energy -= df.loc[df.molecule == product].correlation_energy.values
+            df_reaction.time += df.loc[df.molecule == product].time.values
 
         # subtract uCCSD reference
-        df_reaction['error'] = df_reaction.energy - df_reaction.loc[df_reaction.functional == 'uCCSD'].energy.as_matrix()[0]
+        #df_reaction['error'] = df_reaction.energy - df_reaction.loc[df_reaction.functional == 'uCCSD'].energy.values[0]
 
-        ## Make sure that reaction energy is negative
-        #df_tmp = df_reaction.loc[(df_reaction.functional == 'uCCSD') & (df_reaction.energy > 0)]
-        #if df_tmp.size > 0:
-        #    print("Reverse reaction way of")
-        #    print(df_tmp)
+        # Add the reaction class, charge and spin
+        df_reaction['reaction_class'] = rtype.strip()
+        df_reaction['charge'] = charge.strip()
+        df_reaction['spin'] = spin.strip()
 
-        # Add the reaction class
-        df_reaction['main_class'] = main_class.strip()
-        df_reaction['sub_class'] =  sub_class.strip()
+        ## Add everything but the uCCSD method to the dataframe
+        #dfr = dfr.append(df_reaction[df_reaction.functional != 'uCCSD'], ignore_index = True)
+        # Add everything to the dataframe
+        dfr = dfr.append(df_reaction, ignore_index = True, sort = True)
+        print(reaction_name, df_reaction[df_reaction.functional == 'uCCSD'].energy.values[0], float(reference), df_reaction[df_reaction.functional == 'uCCSD'].energy.values[0] - float(reference))
+    print(dfr.head())
+    print(dfr[dfr.functional == 'uCCSD'].energy.values - np.asarray(reference_energies))
+    quit()
 
-        # Add everything but the uCCSD method to the dataframe
-        dfr = dfr.append(df_reaction[df_reaction.functional != 'uCCSD'], ignore_index = True)
     return dfr
 
 def make_pickles(data_set_name, data_set_path = "../../portfolio_datasets/", pickle_path = "../pickles/"):
@@ -454,8 +461,6 @@ def make_pickles(data_set_name, data_set_path = "../../portfolio_datasets/", pic
         mol_df = parse_molpro(filenames, data_set_name)
         print_missing(mol_df, data_set_name)
         mol_df.to_pickle(mol_df_name)
-    return
-
 
     # Try to read the reaction pickle, else make it.
     try:
@@ -493,13 +498,13 @@ def set_median_timings(df):
                 hybrid_meta_df = df.loc[(df.reaction == reac) & (df.basis == bas) & (df.unrestricted == un) & (df.isin(['M05-2X','M05','M06-2X','M06','M06-HF','M08-HX','M08-SO','MM05-2X','MM05','MM06-2X','MM06','MM06-HF']).functional)]
 
                 # Get the median time and set it.
-                time = np.median(gga_df.time.as_matrix())
+                time = np.median(gga_df.time.values)
                 df.at[gga_df.index, "time"] = time
-                time = np.median(hybrid_df.time.as_matrix())
+                time = np.median(hybrid_df.time.values)
                 df.at[hybrid_df.index, "time"] = time
-                time = np.median(meta_df.time.as_matrix())
+                time = np.median(meta_df.time.values)
                 df.at[meta_df.index, "time"] = time
-                time = np.median(hybrid_meta_df.time.as_matrix())
+                time = np.median(hybrid_meta_df.time.values)
                 df.at[hybrid_meta_df.index, "time"] = time
 
 def simplify_timings(base_df, reaction_name):
@@ -511,7 +516,7 @@ def simplify_timings(base_df, reaction_name):
         for basis in df.basis.unique():
             for unres in True, False:
                 sub_df = df.loc[(df.functional == func) & (df.basis == basis) & (df.unrestricted == unres)]
-                time = sub_df.loc[(sub_df.reaction == reaction_name)].time.as_matrix()[0]
+                time = sub_df.loc[(sub_df.reaction == reaction_name)].time.values[0]
                 df.at[sub_df.index, "time"] = time
     return df
 
@@ -519,9 +524,9 @@ def main():
     """
     Create all the reaction pickles
     """
-    #abde12_reac = make_pickles("abde12")
+    abde12_reac = make_pickles("abde12")
     #nhtbh38_reac = make_pickles("nhtbh38")
-    htbh38_reac = make_pickles("htbh38")
+    #htbh38_reac = make_pickles("htbh38")
     quit()
 
     # combine
