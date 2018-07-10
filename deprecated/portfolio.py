@@ -515,7 +515,7 @@ class Portfolio(Estimators):
         return method(alpha = alphas[best_idx])
 
 
-    def min_variance_upper_mean_bound(self, x = None, alpha = 0):
+     def min_variance_upper_mean_bound(self, x = None, alpha = 0):
         """
         Minimize x'Cx, where C is the covariance matrix and x is the portfolio weights.
         The constraints sum(x) = 1 and |m'x| < self.upper_mean_bound is used, with m being the asset means.

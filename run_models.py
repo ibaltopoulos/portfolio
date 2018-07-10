@@ -17,7 +17,7 @@ dirname = os.path.dirname(os.path.realpath(__file__))
 source_path = dirname + "/portfolio"
 sys.path.append(source_path)
 
-from portfolio.model import SingleMethod, NN, LinearModel
+from portfolio.model import SingleMethod, NN, LinearModel, Markowitz
 
 def calc_mean_and_var(x):
     vars_ = np.var(x, ddof = 1, axis = 1)
@@ -271,8 +271,6 @@ def get_portfolio_details(x, names):
 
     return w, n
 
-
-
 def outer_cv(x, y, m, params, grid = True, 
         outer_cv_splits = 3, outer_cv_repeats = 1, inner_cv_splits = 3, inner_cv_repeats = 1):
     """
@@ -360,11 +358,11 @@ def get_best_params(params):
 
 
 if __name__ == "__main__":
-    df = pd.read_pickle("pickles/abde12_reac.pkl")
+    df = pd.read_pickle("deprecated/abde12_reac.pkl")
     # all but x,y is optional
     x, y, cost, names, rclass = parse_reaction_dataframe(df)
 
-    m = LinearModel(clip_value = 1e-2, cost = cost, cost_reg = 0, positive_constraint = False, sum_constraint = True)
+    m = LinearModel(clip_value = 1e-3, cost = cost, cost_reg = 1e-2, positive_constraint = True)
     z, w = outer_cv(x,y,m,{}, True, 5, 5, 5, 1)[:2]
     print(w[(w>1e-3) | (w<-1e-3)])
     print(names[w.argmax()])
