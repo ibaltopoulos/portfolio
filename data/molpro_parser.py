@@ -3,7 +3,7 @@ import glob
 import pandas as pd
 import sys
 
-def data_parse(filename):
+def data_parse(filename, real_filename = None):
     """
     Opens a molpro output file and parses the energy and computation time.
     """
@@ -11,35 +11,50 @@ def data_parse(filename):
     try:
         with open(filename) as f:
             lines = f.readlines()
-            if "DCSD" in filename:
-                # ccsd tends to crash with H since there's only one electron
-                if filename.split("/")[-1].startswith("H-_") \
-                    or filename.split("/")[-1].startswith("H_"):
-                    data = parse_dcsd(lines, True)
-                else:
-                    data =  parse_dcsd(lines)
-            elif "luCCSD" in filename:
-                if filename.split("/")[-1].startswith("H-_") \
-                    or filename.split("/")[-1].startswith("H_"):
-                    data = parse_luccsd(lines, True)
-                else:
-                    data =  parse_luccsd(lines)
-            elif "_uCCSD" in filename:
-                data =  parse_uccsd(lines)
-
-            elif "lrmp2" in filename:
-                data = parse_lrmp2(lines)
-            elif "KS" in lines[-4:][0]:
-                data = parse_dft(lines)
+        if "DCSD" in filename:
+            # ccsd tends to crash with H since there's only one electron
+            if filename.split("/")[-1].startswith("H-_") \
+                or filename.split("/")[-1].startswith("H_") \
+                or filename.split("/")[-1].startswith("F_")   and "sto-3g" in filename \
+                or filename.split("/")[-1].startswith("F-_")  and "sto-3g" in filename \
+                or filename.split("/")[-1].startswith("O_")   and "sto-3g" in filename \
+                or filename.split("/")[-1].startswith("O-_")  and "sto-3g" in filename \
+                or filename.split("/")[-1].startswith("Cl_")  and "sto-3g" in filename \
+                or filename.split("/")[-1].startswith("Cl-_") and "sto-3g" in filename:
+                data = parse_dcsd(lines, True)
             else:
-                print(filename)
-                quit()
+                data =  parse_dcsd(lines)
+        #elif "luCCSD" in filename:
+        #    if filename.split("/")[-1].startswith("H-_") \
+        #        or filename.split("/")[-1].startswith("H_"):
+        #        data = parse_luccsd(lines, True)
+        #    else:
+        #        data =  parse_luccsd(lines)
+        elif "_uCCSD" in filename:
+            data =  parse_uccsd(lines)
+
+        elif "lrmp2" in filename:
+            data = parse_lrmp2(lines)
+        elif "KS" in lines[-4]:
+            data = parse_dft(lines)
+        elif filename.split("/")[-1].startswith("H_D3") and "sto-3g" in filename:
+            # special case where molpro fails to run dispersion on hydrogen
+            return data_parse(filename.replace("D3",""), filename)
+        elif filename.split("/")[-1].startswith("H_dc") and "sto-3g" in filename:
+            # special case where molpro fails to run dc on hydrogen
+            return data_parse(filename.replace("dc",""), filename)
+
+        else:
+            print("parsing error for", filename)
+            quit()
     except:
-        print(filename)
+        print("parsing error for", filename)
         return
 
+    if not is_none(real_filename):
+        filename = real_filename
 
-    # Parse the filename
+
     filename_data = filename_parse(filename)
     return (*data, *filename_data)
 
@@ -77,28 +92,28 @@ def parse_uccsd(lines):
             break
     return energy, time, e1, e2, ce
 
-def parse_luccsd(lines, single_atom = False):
-    e1 = None
-    e2 = None
-    ce = None
-    time = None
-    for i, line in enumerate(lines[-3::-1]):
-        if "LUCCSD(T)-F12" in line:
-            energy = float(lines[-3-i+1].split()[0])
-        elif "CPU TIMES" in line:
-            time = float(line.split()[3])
-        elif "!RHF STATE 1.1 Energy" in line:
-            if single_atom:
-                energy = float(line.split()[4])
-            ce = energy - float(line.split()[4])
-            # Since this is the last to be read
-            break
-        elif "Two-electron energy" in line:
-            e2 = float(line.split()[2])
-        elif "One-electron energy" in line:
-            e1 = float(line.split()[2])
-
-    return energy, time, e1, e2, ce
+#def parse_luccsd(lines, single_atom = False):
+#    e1 = None
+#    e2 = None
+#    ce = None
+#    time = None
+#    for i, line in enumerate(lines[-3::-1]):
+#        if "LUCCSD(T)-F12" in line:
+#            energy = float(lines[-3-i+1].split()[0])
+#        elif "CPU TIMES" in line:
+#            time = float(line.split()[3])
+#        elif "!RHF STATE 1.1 Energy" in line:
+#            if single_atom:
+#                energy = float(line.split()[4])
+#            ce = energy - float(line.split()[4])
+#            # Since this is the last to be read
+#            break
+#        elif "Two-electron energy" in line:
+#            e2 = float(line.split()[2])
+#        elif "One-electron energy" in line:
+#            e1 = float(line.split()[2])
+#
+#    return energy, time, e1, e2, ce
 
 def parse_dcsd(lines, single_atom = False):
     """
@@ -132,14 +147,21 @@ def parse_dcsd(lines, single_atom = False):
 
     return energy, time, e1, e2, ce
 
-def parse_dft(lines):
-    energy = float(lines[-3].split()[0])
+def parse_dft(lines, single_atom = False):
     e1 = None
     e2 = None
     ce = None
     time = None
+    if not single_atom:
+        energy = float(lines[-3].split()[0])
+    if single_atom:
+        ce = 0
+
     for line in lines[-3::-1]:
-        if "CPU TIMES" in line:
+        if "!RHF STATE 1.1 Energy" in line and single_atom:
+            energy = float(line.split()[4])
+            break
+        elif "CPU TIMES" in line:
             time = float(line.split()[3])
         elif "Density functional" in line:
             ce = float(line.split()[2])
@@ -148,7 +170,8 @@ def parse_dft(lines):
         elif "One-electron energy" in line:
             e1 = float(line.split()[2])
             # Since this is the last to be read
-            break
+            if not single_atom:
+                break
     return energy, time, e1, e2, ce
 
 def is_none(x):
@@ -174,7 +197,8 @@ def filename_parse(filename):
     name = func + "/" + basis
     if func in ['rDCSD', 'df-lrmp2']:
         unrestricted = False
-    elif func in ['luCCSD', 'uCCSD', 'uDCSD']:
+    #elif func in ['luCCSD', 'uCCSD', 'uDCSD']:
+    elif func in ['uCCSD', 'uDCSD']:
         unrestricted = True
     else:
         unrestricted = (len(tokens) == 4)
@@ -211,6 +235,9 @@ def parse_molpro(filenames, data_set):
         if None in [energy, time, e1, e2, ce] and '_uCCSD' not in filename \
             or is_none(energy):
             print(energy, time, e1, e2, ce, filename)
+            continue
+        if func == "DCSD" and unrestricted == False and basis == 'sto-3g':
+            print("sto-3g have been removed for rDCSD temporarily")
             continue
 
         # Special case for abde12 due to redundancy in the 
@@ -261,6 +288,11 @@ def parse_molpro(filenames, data_set):
     # Remove duplicates
     pd.DataFrame.drop_duplicates(df, inplace=True, subset=['functional', 'molecule','basis','unrestricted'])
 
+    ## check for duplicated functionals
+    #df2 = pd.DataFrame.duplicated(df, keep = False, subset=['molecule','basis','unrestricted', 'energy'])
+    #print(df[df2])
+    #quit()
+
     unique_functionals = df.functional.unique().tolist()
     unique_molecules = df.molecule.unique().tolist()
     unique_basis = df.basis.unique().tolist()
@@ -289,19 +321,19 @@ def parse_molpro(filenames, data_set):
                 continue
             for basis in unique_basis:
                 # The lCCSD is only unrestricted and doesn't have all basis sets
-                if func == 'luCCSD':
-                    if basis in ['sto-3g', 'SV-P']:
-                        continue
-                    sub = df.loc[(df.molecule == mol) & (df.functional == func) & (df.basis == basis)]
-                    if sub.shape[0] == 0:
-                        missing_names.append('luCCSD/' + basis)
-                        missing_mols.append(mol)
-                        missing_functional.append(func)
-                        missing_basis.append(basis)
-                        missing_unrestricted.append(False)
-                    elif sub.shape[0] != 1:
-                        quit(("Missed something", func, mol, basis))
-                    continue
+                #if func == 'luCCSD':
+                #    if basis in ['sto-3g', 'SV-P']:
+                #        continue
+                #    sub = df.loc[(df.molecule == mol) & (df.functional == func) & (df.basis == basis)]
+                #    if sub.shape[0] == 0:
+                #        missing_names.append('luCCSD/' + basis)
+                #        missing_mols.append(mol)
+                #        missing_functional.append(func)
+                #        missing_basis.append(basis)
+                #        missing_unrestricted.append(False)
+                #    elif sub.shape[0] != 1:
+                #        quit(("Missed something", func, mol, basis))
+                #    continue
                 # The df-lrmp2 is only restricted.
                 if func == 'df-lrmp2':
                     if basis in ['sto-3g', 'SV-P']:
@@ -320,6 +352,9 @@ def parse_molpro(filenames, data_set):
                     # The DCSD only have select basis sets.
                     if func == 'DCSD':
                         if basis in ['qzvp', 'avtz', 'tzvp', 'avdz']:
+                            continue
+                        if basis == 'sto-3g' and unres == False:
+                            print("sto-3g have been removed for rDCSD temporarily")
                             continue
                         sub = df.loc[(df.molecule == mol) & (df.functional == func) & (df.basis == basis) & (df.unrestricted == unres)]
                         if sub.shape[0] == 0:
@@ -461,6 +496,7 @@ def make_pickles(data_set_name, data_set_path = "../../portfolio_datasets/", pic
         mol_df = parse_molpro(filenames, data_set_name)
         print_missing(mol_df, data_set_name)
         mol_df.to_pickle(mol_df_name)
+    return
 
     # Try to read the reaction pickle, else make it.
     try:
@@ -525,8 +561,8 @@ def main():
     Create all the reaction pickles
     """
     abde12_reac = make_pickles("abde12")
-    #nhtbh38_reac = make_pickles("nhtbh38")
-    #htbh38_reac = make_pickles("htbh38")
+    nhtbh38_reac = make_pickles("nhtbh38")
+    htbh38_reac = make_pickles("htbh38")
     quit()
 
     # combine
