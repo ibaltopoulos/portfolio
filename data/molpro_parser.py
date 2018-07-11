@@ -236,9 +236,6 @@ def parse_molpro(filenames, data_set):
             or is_none(energy):
             print(energy, time, e1, e2, ce, filename)
             continue
-        if func == "DCSD" and unrestricted == False and basis == 'sto-3g':
-            print("sto-3g have been removed for rDCSD temporarily")
-            continue
 
         # Special case for abde12 due to redundancy in the 
         # naming of the files
@@ -352,9 +349,6 @@ def parse_molpro(filenames, data_set):
                     # The DCSD only have select basis sets.
                     if func == 'DCSD':
                         if basis in ['qzvp', 'avtz', 'tzvp', 'avdz']:
-                            continue
-                        if basis == 'sto-3g' and unres == False:
-                            print("sto-3g have been removed for rDCSD temporarily")
                             continue
                         sub = df.loc[(df.molecule == mol) & (df.functional == func) & (df.basis == basis) & (df.unrestricted == unres)]
                         if sub.shape[0] == 0:
